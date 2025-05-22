@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"time"
 
@@ -108,6 +109,19 @@ type Game struct {
 	CanvasDragStartX int     // X position where canvas drag started
 	CanvasDragStartY int     // Y position where canvas drag started
 
+	// Performance optimization: cached images
+	graphCanvas       *ebiten.Image
+	gridCanvas        *ebiten.Image
+	canvasNeedsRedraw bool
+	lastGraphState    string // Simple hash to track if graph state has changed
+
+	// UI element caches
+	textBgCache       *ebiten.Image
+	sliderBgCache     *ebiten.Image
+	sliderHandleCache *ebiten.Image
+	speedBgCache      *ebiten.Image
+	messageBgCache    *ebiten.Image
+
 	// Context menu
 	ContextMenu *ContextMenu
 
@@ -124,6 +138,9 @@ type Game struct {
 
 // NewGame creates a new game with the given simulator
 func NewGame(sim *simulator.Simulator) *Game {
+	// Get initial window size for canvas initialization
+	screenWidth, screenHeight := ebiten.WindowSize()
+
 	g := &Game{
 		Sim:            sim,
 		StartNode:      0,
@@ -139,12 +156,40 @@ func NewGame(sim *simulator.Simulator) *Game {
 		CanvasOffsetX:  0, // Initial canvas offset
 		CanvasOffsetY:  0, // Initial canvas offset
 		CanvasDragging: false,
+
+		// Initialize cached canvases
+		graphCanvas:       ebiten.NewImage(screenWidth, screenHeight),
+		gridCanvas:        ebiten.NewImage(screenWidth, screenHeight),
+		canvasNeedsRedraw: true, // Force initial draw
+
+		// Initialize UI element caches
+		textBgCache:       ebiten.NewImage(screenWidth, 20),
+		sliderBgCache:     ebiten.NewImage(200, 20),
+		sliderHandleCache: ebiten.NewImage(10, 20),
+		speedBgCache:      ebiten.NewImage(50, 20),
+		messageBgCache:    ebiten.NewImage(200, 20),
 	}
 
 	// Create UI buttons
 	g.createButtons()
 
 	return g
+}
+
+// generateGraphStateHash creates a simple "hash" to detect graph state changes
+func (g *Game) generateGraphStateHash() string {
+	// This is a simple fingerprint of the current graph state
+	// If this changes, we need to redraw the graph
+	h := fmt.Sprintf("n%d-e%d-c%d-v%d-o%f-%f-g%v",
+		len(g.Sim.Graph.Nodes),
+		len(g.Sim.Graph.Edges),
+		g.Sim.Current,
+		len(g.Sim.Visited),
+		g.CanvasOffsetX,
+		g.CanvasOffsetY,
+		g.ShowGrid)
+
+	return h
 }
 
 // createButtons initializes all UI buttons
@@ -189,25 +234,39 @@ func (g *Game) createButtons() {
 				}
 			},
 		},
+		/*
+			{
+				X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
+				Text: "AVL", BgColor: blueBg, TextColor: whiteTxt, AnchorBottom: true,
+				Action: func() {
+					if g.Sim.Mode == algorithms.ModeIdle {
+						g.Sim.StartAVL() // Assuming you'll add this method
+					}
+				},
+			},
+		*/
 		{
+			// Adjusted X position due to AVL button removal
 			X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Step", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle {
+				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
 					g.Sim.Update()
 				}
 			},
 		},
 		{
+			// Adjusted X position
 			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Auto", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle {
+				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
 					g.AutoStep = !g.AutoStep
 				}
 			},
 		},
 		{
+			// Adjusted X position
 			X: margin + 4*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Reset", BgColor: redBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
@@ -390,6 +449,9 @@ func (g *Game) addNode(x, y int) {
 
 	// Add to the simulator's graph
 	g.Sim.Graph.Nodes = append(g.Sim.Graph.Nodes, newNode)
+
+	// Mark canvas for redraw
+	g.canvasNeedsRedraw = true
 }
 
 func (g *Game) removeNode(index int) {
@@ -439,6 +501,9 @@ func (g *Game) removeNode(index int) {
 	} else if g.StartNode > index {
 		g.StartNode--
 	}
+
+	// Mark canvas for redraw
+	g.canvasNeedsRedraw = true
 }
 
 func (g *Game) addEdge(a, b int) {
@@ -455,6 +520,9 @@ func (g *Game) addEdge(a, b int) {
 	// Update neighbors
 	g.Sim.Graph.Nodes[a].Neighbors = append(g.Sim.Graph.Nodes[a].Neighbors, b)
 	g.Sim.Graph.Nodes[b].Neighbors = append(g.Sim.Graph.Nodes[b].Neighbors, a)
+
+	// Mark canvas for redraw
+	g.canvasNeedsRedraw = true
 }
 
 func (g *Game) removeEdge(a, b int) {
@@ -473,6 +541,9 @@ func (g *Game) removeEdge(a, b int) {
 		// Update node neighbors
 		g.removeFromNeighbors(a, b)
 		g.removeFromNeighbors(b, a)
+
+		// Mark canvas for redraw
+		g.canvasNeedsRedraw = true
 
 		g.showMessage("Edge removed")
 	} else {
@@ -521,6 +592,9 @@ func (g *Game) clearNodeEdges(nodeIndex int) {
 		}
 		g.Sim.Graph.Nodes[i].Neighbors = newNeighbors
 	}
+
+	// Mark canvas for redraw
+	g.canvasNeedsRedraw = true
 }
 
 // handleKeyboardInput maintains keyboard control support for convenience
@@ -534,6 +608,12 @@ func handleKeyboardInput(g *Game) {
 	if ebiten.IsKeyPressed(ebiten.KeyD) && g.Sim.Mode == algorithms.ModeIdle {
 		g.Sim.StartDFS(g.StartNode)
 	}
+	/*
+		// AVL key (e.g., L key)
+		if ebiten.IsKeyPressed(ebiten.KeyL) && g.Sim.Mode == algorithms.ModeIdle {
+			g.Sim.StartAVL() // Assuming you'll add this method
+		}
+	*/
 
 	// Reset key
 	if ebiten.IsKeyPressed(ebiten.KeyR) {
@@ -542,14 +622,14 @@ func handleKeyboardInput(g *Game) {
 	}
 
 	// Toggle auto-step (A key)
-	if ebiten.IsKeyPressed(ebiten.KeyA) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle {
+	if ebiten.IsKeyPressed(ebiten.KeyA) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
 		g.AutoStep = !g.AutoStep
 		// Wait to avoid repeated toggles
 		time.Sleep(200 * time.Millisecond)
 	}
 
 	// Step key (space)
-	if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle {
+	if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
 		g.Sim.Update()
 		// Wait to avoid too-rapid stepping
 		time.Sleep(100 * time.Millisecond)
@@ -558,7 +638,9 @@ func handleKeyboardInput(g *Game) {
 
 // Layout returns the game's logical screen dimensions
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return 800, 600 // Increased from 500, 600 to give more width for buttons
+	// Call resize handler
+	g.HandleResize(outsideWidth, outsideHeight)
+	return outsideWidth, outsideHeight
 }
 
 // getAdjustedButtonPosition calculates the button position based on anchoring
