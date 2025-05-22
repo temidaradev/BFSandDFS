@@ -156,30 +156,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		draw.DrawLine(screen, float64(right), float64(top), float64(right), float64(bottom), borderColor)   // Right border
 	}
 
-	// Draw HUD overlay
-	hudOverlay := ebiten.NewImage(screenWidth, screenHeight)
-	hudOverlay.Fill(color.RGBA{0, 0, 0, 0}) // Transparent background
+	// Draw HUD overlay (no black bars, just elements)
+	// topHudHeight := 40 // Removed top HUD
+	// bottomHudHeight := 60 // Removed bottom HUD
 
-	// Draw top HUD bar
-	topHudHeight := 40
-	topHud := ebiten.NewImage(screenWidth, topHudHeight)
-	topHud.Fill(color.RGBA{30, 30, 30, 200})
-	opts = &ebiten.DrawImageOptions{}
-	screen.DrawImage(topHud, opts)
-
-	// Draw bottom HUD bar
-	bottomHudHeight := 60
-	bottomHud := ebiten.NewImage(screenWidth, bottomHudHeight)
-	bottomHud.Fill(color.RGBA{30, 30, 30, 200})
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(0, float64(screenHeight-bottomHudHeight))
-	screen.DrawImage(bottomHud, opts)
-
-	// Draw buttons on top of HUD (need to re-draw them here)
+	// Draw buttons directly
 	for _, btn := range g.Buttons {
-		// The Button's Draw method likely needs the game state to calculate position based on anchoring
-		// Let's assume it takes the screen and the game object.
-		// Revert to the likely original intended call based on linter error analysis.
 		btn.Draw(screen, g)
 	}
 
@@ -193,7 +175,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 			orderStr += string(rune('A' + nodeIdx))
 		}
-		text.Draw(screen, orderStr, basicfont.Face7x13, 20, 60, color.Black)
+		// Position visit order at the top, slightly below the screen edge
+		text.Draw(screen, orderStr, basicfont.Face7x13, 20, 20, color.Black)
 
 		// Draw queue or stack status
 		var dataStructStr string
@@ -214,7 +197,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				dataStructStr += string(rune('A' + nodeIdx))
 			}
 		}
-		text.Draw(screen, dataStructStr, basicfont.Face7x13, 20, 80, color.Black)
+		// Position queue/stack status below visit order
+		text.Draw(screen, dataStructStr, basicfont.Face7x13, 20, 40, color.Black)
 	}
 
 	// Draw the message display
@@ -222,8 +206,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// Background for message
 		messageBgWidth := 300 // Fixed width for the message box
 		messageBgHeight := 30
-		messageBgX := (screenWidth - messageBgWidth) / 2                    // Center horizontally
-		messageBgY := screenHeight - bottomHudHeight - messageBgHeight - 10 // Above bottom HUD
+		messageBgX := (screenWidth - messageBgWidth) / 2 // Center horizontally
+		// Position message near the bottom, above the speed slider and zoom indicator
+		messageBgY := screenHeight - 80 // Adjust position
 		messageBg := ebiten.NewImage(messageBgWidth, messageBgHeight)
 		messageBg.Fill(color.RGBA{50, 50, 50, 200}) // Dark gray with transparency
 		opts := &ebiten.DrawImageOptions{}
@@ -243,8 +228,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Background
 	sliderBgWidth := 200
 	sliderBgHeight := 20
+	// Position speed slider near the bottom right
 	sliderBgX := screenWidth - sliderBgWidth - 20
-	sliderBgY := screenHeight - 50
+	sliderBgY := screenHeight - 30 // Adjust position
 	sliderBg := ebiten.NewImage(sliderBgWidth, sliderBgHeight)
 	sliderBg.Fill(color.RGBA{80, 80, 80, 255})
 	opts = &ebiten.DrawImageOptions{}
@@ -265,11 +251,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Speed label
 	speedLabel := fmt.Sprintf("Speed: %d", 50-g.StepDelay+10)
+	// Position speed label to the left of the slider
 	text.Draw(screen, speedLabel, basicfont.Face7x13, sliderBgX-text.BoundString(basicfont.Face7x13, speedLabel).Dx()-10, sliderBgY+text.BoundString(basicfont.Face7x13, speedLabel).Dy()/2+basicfont.Face7x13.Ascent/2, color.Black)
 
 	// Draw Zoom level
 	zoomLabel := fmt.Sprintf("Zoom: %.1fx", g.ZoomLevel)
-	text.Draw(screen, zoomLabel, basicfont.Face7x13, screenWidth-text.BoundString(basicfont.Face7x13, zoomLabel).Dx()-20, screenHeight-20, color.Black)
+	// Position zoom level near the bottom left
+	text.Draw(screen, zoomLabel, basicfont.Face7x13, 20, screenHeight-20, color.Black)
 
 	// Draw Help Overlay
 	if g.ShowHelp {

@@ -176,6 +176,12 @@ type Game struct {
 	DraggingSelection   bool     // Whether a selected group is being dragged
 	SelectionDragStartX float64  // X position where dragging of selection started (canvas coords)
 	SelectionDragStartY float64  // Y position where dragging of selection started (canvas coords)
+
+	// Pinch zoom features
+	Pinching             bool    // Whether the user is currently pinching
+	InitialPinchDistance float64 // The distance between touch points when pinching started
+	PinchCenterX         int     // The X coordinate of the pinch center
+	PinchCenterY         int     // The Y coordinate of the pinch center
 }
 
 // NewGame creates a new game with the given simulator

@@ -670,7 +670,84 @@ func (g *Game) Update() error {
 			g.ZoomLevel = newZoom
 			g.CanvasOffsetX = newOffsetX
 			g.CanvasOffsetY = newOffsetY
+			g.canvasNeedsRedraw = true
 		}
+	}
+
+	// Handle pinch zoom for touchpads (assuming a multi-touch or trackpad gesture)
+	// Ebiten's inpututil doesn't have explicit pinch gesture detection.
+	// A common approach is to track two touch points or use platform-specific libraries.
+	// For a simple implementation, we can approximate by checking for two touch points
+	// and calculating the distance between them.
+
+	// Get active touch IDs
+	touchIDs := ebiten.TouchIDs()
+
+	// Check for at least two touch points (simulating pinch)
+	if len(touchIDs) >= 2 {
+		// Get the positions of the first two touch points
+		p1x, p1y := ebiten.TouchPosition(touchIDs[0])
+		p2x, p2y := ebiten.TouchPosition(touchIDs[1])
+
+		// Calculate the distance between the touch points
+		distance := math.Sqrt(math.Pow(float64(p1x-p2x), 2) + math.Pow(float64(p1y-p2y), 2))
+
+		// Store the initial distance when the pinch starts
+		if !g.Pinching {
+			g.Pinching = true
+			g.InitialPinchDistance = distance
+			// Store the center of the pinch for zooming towards that point
+			g.PinchCenterX = (p1x + p2x) / 2
+			g.PinchCenterY = (p1y + p2y) / 2
+		} else {
+			// Calculate the zoom factor based on the change in distance
+			zoomFactor := distance / g.InitialPinchDistance
+			newZoom := g.ZoomLevel * zoomFactor
+
+			// Limit zoom range (0.5x to 2.0x)
+			if newZoom >= 0.5 && newZoom <= 2.0 {
+				// Calculate zoom center in canvas coordinates
+				canvasCenterX := float64(g.PinchCenterX) - g.CanvasOffsetX
+				canvasCenterY := float64(g.PinchCenterY) - g.CanvasOffsetY
+
+				// Calculate new offset to zoom towards the pinch center
+				newOffsetX := float64(g.PinchCenterX) - canvasCenterX*newZoom
+				newOffsetY := float64(g.PinchCenterY) - canvasCenterY*newZoom
+
+				// Get screen dimensions
+				screenWidth, _ := ebiten.WindowSize()
+
+				// Calculate grid boundaries
+				gridSize := float64(1000) // Same as in drawer.go
+				minOffset := -gridSize*newZoom + float64(screenWidth)
+				maxOffset := float64(0)
+
+				// Ensure new offset stays within grid boundaries
+				if newOffsetX > maxOffset {
+					newOffsetX = maxOffset
+				} else if newOffsetX < minOffset {
+					newOffsetX = minOffset
+				}
+
+				if newOffsetY > maxOffset {
+					newOffsetY = maxOffset
+				} else if newOffsetY < minOffset {
+					newOffsetY = minOffset
+				}
+
+				// Update zoom and offset
+				g.ZoomLevel = newZoom
+				g.CanvasOffsetX = newOffsetX
+				g.CanvasOffsetY = newOffsetY
+				g.canvasNeedsRedraw = true
+			}
+
+			// Update initial pinch distance for the next frame
+			g.InitialPinchDistance = distance
+		}
+	} else {
+		// If less than two touch points, reset pinching state
+		g.Pinching = false
 	}
 
 	// Handle zoom with keyboard shortcuts
