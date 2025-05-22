@@ -197,3 +197,8 @@ func (s *Simulator) DecrementAVLValue() {
 		s.avlValue--
 	}
 }
+
+// SetAVLValue sets the value for AVL operations
+func (s *Simulator) SetAVLValue(value int) {
+	s.avlValue = value
+}

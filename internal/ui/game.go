@@ -45,7 +45,7 @@ func (b *Button) Draw(screen *ebiten.Image, g *Game) {
 		btnX, btnY = b.X, b.Y
 	}
 
-	// Button background
+	// Button background with rounded corners effect
 	bg := ebiten.NewImage(b.Width, b.Height)
 
 	// Different color for hover state
@@ -60,7 +60,26 @@ func (b *Button) Draw(screen *ebiten.Image, g *Game) {
 		}
 	}
 
+	// Fill main background
 	bg.Fill(buttonColor)
+
+	// Add a subtle border
+	borderColor := color.RGBA{
+		uint8(max(int(buttonColor.R)-30, 0)),
+		uint8(max(int(buttonColor.G)-30, 0)),
+		uint8(max(int(buttonColor.B)-30, 0)),
+		255,
+	}
+
+	// Draw border
+	for i := 0; i < b.Width; i++ {
+		bg.Set(i, 0, borderColor)          // Top
+		bg.Set(i, b.Height-1, borderColor) // Bottom
+	}
+	for i := 0; i < b.Height; i++ {
+		bg.Set(0, i, borderColor)         // Left
+		bg.Set(b.Width-1, i, borderColor) // Right
+	}
 
 	// Draw button background
 	opts := &ebiten.DrawImageOptions{}
@@ -71,6 +90,10 @@ func (b *Button) Draw(screen *ebiten.Image, g *Game) {
 	textWidth := len(b.Text) * 7 // Approximate width based on basicfont
 	textX := btnX + (b.Width-textWidth)/2
 	textY := btnY + b.Height/2 + 5 // +5 for centering with basicfont
+
+	// Add text shadow for better visibility
+	shadowColor := color.RGBA{0, 0, 0, 100}
+	text.Draw(screen, b.Text, basicfont.Face7x13, textX+1, textY+1, shadowColor)
 	text.Draw(screen, b.Text, basicfont.Face7x13, textX, textY, b.TextColor)
 }
 
@@ -134,6 +157,25 @@ type Game struct {
 	// Message display
 	Message      string
 	MessageTimer int
+
+	ZoomLevel float64 // Add zoom level
+	ShowHelp  bool    // Add help overlay toggle
+
+	// AVL Input Modal
+	ShowAVLInput  bool
+	AVLInputValue int
+	AVLAction     string // "insert", "delete", "search"
+	AVLInputText  string // Text input for AVL value
+
+	// Selection features
+	Selecting           bool     // Whether the user is currently dragging a selection box
+	SelectionStartX     int      // X position where selection drag started
+	SelectionStartY     int      // Y position where selection drag started
+	SelectedNodes       []int    // Indices of selected nodes
+	SelectedEdges       [][2]int // Indices of selected edges (as pairs of node indices)
+	DraggingSelection   bool     // Whether a selected group is being dragged
+	SelectionDragStartX float64  // X position where dragging of selection started (canvas coords)
+	SelectionDragStartY float64  // Y position where dragging of selection started (canvas coords)
 }
 
 // NewGame creates a new game with the given simulator
@@ -156,6 +198,8 @@ func NewGame(sim *simulator.Simulator) *Game {
 		CanvasOffsetX:  0, // Initial canvas offset
 		CanvasOffsetY:  0, // Initial canvas offset
 		CanvasDragging: false,
+		ZoomLevel:      1.0,   // Initialize zoom level to 1.0 (100%)
+		ShowHelp:       false, // Initialize help overlay as hidden
 
 		// Initialize cached canvases
 		graphCanvas:       ebiten.NewImage(screenWidth, screenHeight),
@@ -234,19 +278,7 @@ func (g *Game) createButtons() {
 				}
 			},
 		},
-		/*
-			{
-				X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
-				Text: "AVL", BgColor: blueBg, TextColor: whiteTxt, AnchorBottom: true,
-				Action: func() {
-					if g.Sim.Mode == algorithms.ModeIdle {
-						g.Sim.StartAVL() // Assuming you'll add this method
-					}
-				},
-			},
-		*/
 		{
-			// Adjusted X position due to AVL button removal
 			X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Step", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
@@ -256,7 +288,6 @@ func (g *Game) createButtons() {
 			},
 		},
 		{
-			// Adjusted X position
 			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Auto", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
@@ -266,7 +297,6 @@ func (g *Game) createButtons() {
 			},
 		},
 		{
-			// Adjusted X position
 			X: margin + 4*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Reset", BgColor: redBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
@@ -283,9 +313,11 @@ func (g *Game) createButtons() {
 			Text: "New Graph", BgColor: purpleBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				if g.Sim.Mode == algorithms.ModeIdle {
-					nodeCount := len(g.Sim.Graph.Nodes)
-					*g.Sim = *simulator.NewSimulator(nodeCount)
-					g.StartNode = 0
+					// Create an empty graph instead of a random one
+					g.Sim.Graph = graph.Graph{}
+					g.Sim.Reset()
+					g.StartNode = -1 // No start node for an empty graph initially
+					g.showMessage("New empty graph created. Add nodes to start.")
 				}
 			},
 		},
@@ -427,12 +459,46 @@ func (g *Game) showMessage(msg string) {
 	g.MessageTimer = 120 // Display for 2 seconds (120 frames at 60 FPS)
 }
 
-// Note: The Update method implementation has been moved to updater.go
-// to avoid duplicate method definitions
+// Layout returns the game's logical screen dimensions
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	// Call resize handler
+	g.HandleResize(outsideWidth, outsideHeight)
+	return outsideWidth, outsideHeight
+}
+
+// getAdjustedButtonPosition calculates the button position based on anchoring
+func (g *Game) getAdjustedButtonPosition(btn *Button) (int, int) {
+	btnX := btn.X
+	btnY := btn.Y
+
+	// Adjust X position for right-anchored buttons
+	if btn.AnchorRight {
+		// Get screen width and adjust from right edge
+		w, _ := ebiten.WindowSize()
+		btnX = w - btn.X - btn.Width
+	}
+
+	// Adjust Y position for bottom-anchored buttons
+	if btn.AnchorBottom {
+		// Get screen height and adjust from bottom edge
+		_, h := ebiten.WindowSize()
+		btnY = h - btn.Y - btn.Height
+	}
+
+	return btnX, btnY
+}
 
 // min returns the minimum of two integers
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+// max returns the maximum of two integers
+func max(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b
@@ -608,12 +674,6 @@ func handleKeyboardInput(g *Game) {
 	if ebiten.IsKeyPressed(ebiten.KeyD) && g.Sim.Mode == algorithms.ModeIdle {
 		g.Sim.StartDFS(g.StartNode)
 	}
-	/*
-		// AVL key (e.g., L key)
-		if ebiten.IsKeyPressed(ebiten.KeyL) && g.Sim.Mode == algorithms.ModeIdle {
-			g.Sim.StartAVL() // Assuming you'll add this method
-		}
-	*/
 
 	// Reset key
 	if ebiten.IsKeyPressed(ebiten.KeyR) {
@@ -634,33 +694,4 @@ func handleKeyboardInput(g *Game) {
 		// Wait to avoid too-rapid stepping
 		time.Sleep(100 * time.Millisecond)
 	}
-}
-
-// Layout returns the game's logical screen dimensions
-func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	// Call resize handler
-	g.HandleResize(outsideWidth, outsideHeight)
-	return outsideWidth, outsideHeight
-}
-
-// getAdjustedButtonPosition calculates the button position based on anchoring
-func (g *Game) getAdjustedButtonPosition(btn *Button) (int, int) {
-	btnX := btn.X
-	btnY := btn.Y
-
-	// Adjust X position for right-anchored buttons
-	if btn.AnchorRight {
-		// Get screen width and adjust from right edge
-		w, _ := ebiten.WindowSize()
-		btnX = w - btn.X - btn.Width
-	}
-
-	// Adjust Y position for bottom-anchored buttons
-	if btn.AnchorBottom {
-		// Get screen height and adjust from bottom edge
-		_, h := ebiten.WindowSize()
-		btnY = h - btn.Y - btn.Height
-	}
-
-	return btnX, btnY
 }
