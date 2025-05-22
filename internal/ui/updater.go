@@ -415,16 +415,25 @@ func (g *Game) Update() error {
 	}
 
 	// Auto-stepping
-	if g.AutoStep && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle {
+	if g.AutoStep && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 		g.StepCounter++
 		if g.StepCounter >= g.StepDelay {
 			g.StepCounter = 0
 			g.Sim.Update()
 		}
+	} else if g.AutoStep && g.Sim.Mode == algorithms.ModeAVL {
+		// Disable auto-stepping when in AVL mode
+		g.AutoStep = false
 	}
 
 	// Keep keyboard controls for convenience
 	handleKeyboardInput(g)
+
+	// Handle AVL input if modal is shown
+	/* if g.ShowAVLInput {
+		g.handleAVLInput()
+		return nil // Prevent other actions while input modal is active
+	} */
 
 	return nil
 }

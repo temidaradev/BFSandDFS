@@ -250,7 +250,7 @@ func (g *Game) createButtons() {
 			X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Step", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
+				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 					g.Sim.Update()
 				}
 			},
@@ -260,7 +260,7 @@ func (g *Game) createButtons() {
 			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Auto", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
+				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 					g.AutoStep = !g.AutoStep
 				}
 			},
@@ -622,14 +622,14 @@ func handleKeyboardInput(g *Game) {
 	}
 
 	// Toggle auto-step (A key)
-	if ebiten.IsKeyPressed(ebiten.KeyA) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
+	if ebiten.IsKeyPressed(ebiten.KeyA) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 		g.AutoStep = !g.AutoStep
 		// Wait to avoid repeated toggles
 		time.Sleep(200 * time.Millisecond)
 	}
 
 	// Step key (space)
-	if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle /* && g.Sim.Mode != algorithms.ModeAVL */ {
+	if ebiten.IsKeyPressed(ebiten.KeySpace) && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 		g.Sim.Update()
 		// Wait to avoid too-rapid stepping
 		time.Sleep(100 * time.Millisecond)

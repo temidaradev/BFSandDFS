@@ -7,6 +7,7 @@ const (
 	ModeIdle TraversalMode = iota
 	ModeBFS
 	ModeDFS
+	ModeAVL // New mode for AVL tree operations
 )
 
 // BFSStep performs one step of the BFS algorithm
