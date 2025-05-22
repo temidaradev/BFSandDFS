@@ -103,6 +103,8 @@ type Game struct {
 	StartNode         int
 	MouseX            int
 	MouseY            int
+	lastMouseX        int // Track last mouse X position for optimization
+	lastMouseY        int // Track last mouse Y position for optimization
 	MouseClicked      bool
 	MouseReleased     bool
 	MouseRightClicked bool
@@ -136,7 +138,9 @@ type Game struct {
 	graphCanvas       *ebiten.Image
 	gridCanvas        *ebiten.Image
 	canvasNeedsRedraw bool
-	lastGraphState    string // Simple hash to track if graph state has changed
+	lastGraphState    string  // Simple hash to track if graph state has changed
+	lastCanvasOffsetX float64 // Track last canvas offset for optimization
+	lastCanvasOffsetY float64 // Track last canvas offset for optimization
 
 	// UI element caches
 	textBgCache       *ebiten.Image
@@ -168,7 +172,7 @@ type Game struct {
 	AVLInputText  string // Text input for AVL value
 
 	// Selection features
-	Selecting           bool     // Whether the user is currently dragging a selection box
+	Selecting           bool
 	SelectionStartX     int      // X position where selection drag started
 	SelectionStartY     int      // Y position where selection drag started
 	SelectedNodes       []int    // Indices of selected nodes
@@ -181,7 +185,13 @@ type Game struct {
 	Pinching             bool    // Whether the user is currently pinching
 	InitialPinchDistance float64 // The distance between touch points when pinching started
 	PinchCenterX         int     // The X coordinate of the pinch center
-	PinchCenterY         int     // The Y coordinate of the pinch center
+	PinchCenterY         int     // The Y coordinate
+
+	// Performance optimization fields
+	lastFrameTime time.Time
+	frameCount    int
+	fps           int
+	lastFPSUpdate time.Time
 }
 
 // NewGame creates a new game with the given simulator

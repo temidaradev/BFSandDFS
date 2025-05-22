@@ -19,122 +19,102 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Get window dimensions
 	screenWidth, screenHeight := ebiten.WindowSize()
 
-	// Create a separate canvas for graph visualization - use full screen instead of reserving space
-	graphCanvas := ebiten.NewImage(screenWidth, screenHeight)
-	graphCanvas.Fill(color.RGBA{240, 240, 240, 255})
-
-	// Draw grid if enabled - draw it on the graph canvas so it moves with the graph
-	if g.ShowGrid {
-		// Create a temporary canvas for the grid that's larger than the screen
-		// to ensure we have enough grid lines when moving
-		gridSize := 1000 // Make it large enough to cover movement range
-		gridCanvas := ebiten.NewImage(gridSize, gridSize)
-		gridCanvas.Fill(color.RGBA{240, 240, 240, 255})
-
-		// Draw grid on the temporary canvas
-		draw.DrawGrid(gridCanvas, gridSize, gridSize, g.GridConfig)
-
-		// Draw grid border
-		borderColor := color.RGBA{100, 100, 100, 255}
-		// Draw top and bottom borders
-		for i := 0; i < gridSize; i++ {
-			gridCanvas.Set(i, 0, borderColor)
-			gridCanvas.Set(i, gridSize-1, borderColor)
+	// Only redraw if necessary
+	if g.canvasNeedsRedraw {
+		// Create a separate canvas for graph visualization - use full screen instead of reserving space
+		if g.graphCanvas == nil || g.graphCanvas.Bounds().Dx() != screenWidth || g.graphCanvas.Bounds().Dy() != screenHeight {
+			g.graphCanvas = ebiten.NewImage(screenWidth, screenHeight)
 		}
-		// Draw left and right borders
-		for i := 0; i < gridSize; i++ {
-			gridCanvas.Set(0, i, borderColor)
-			gridCanvas.Set(gridSize-1, i, borderColor)
+		g.graphCanvas.Fill(color.RGBA{240, 240, 240, 255})
+
+		// Draw grid if enabled - draw it on the graph canvas so it moves with the graph
+		if g.ShowGrid {
+			// Create a temporary canvas for the grid that's larger than the screen
+			// to ensure we have enough grid lines when moving
+			gridSize := 1000 // Make it large enough to cover movement range
+			if g.gridCanvas == nil || g.gridCanvas.Bounds().Dx() != gridSize || g.gridCanvas.Bounds().Dy() != gridSize {
+				g.gridCanvas = ebiten.NewImage(gridSize, gridSize)
+			}
+			g.gridCanvas.Fill(color.RGBA{240, 240, 240, 255})
+
+			// Draw grid on the temporary canvas using optimized drawing
+			draw.DrawOptimizedGrid(g.gridCanvas, gridSize, gridSize, g.GridConfig)
+
+			// Draw grid border
+			borderColor := color.RGBA{100, 100, 100, 255}
+			// Draw top and bottom borders
+			for i := 0; i < gridSize; i++ {
+				g.gridCanvas.Set(i, 0, borderColor)
+				g.gridCanvas.Set(i, gridSize-1, borderColor)
+			}
+			// Draw left and right borders
+			for i := 0; i < gridSize; i++ {
+				g.gridCanvas.Set(0, i, borderColor)
+				g.gridCanvas.Set(gridSize-1, i, borderColor)
+			}
+
+			// Draw the grid canvas onto the graph canvas with offset
+			gridOpts := &ebiten.DrawImageOptions{}
+			gridOpts.GeoM.Translate(g.CanvasOffsetX, g.CanvasOffsetY)
+			g.graphCanvas.DrawImage(g.gridCanvas, gridOpts)
 		}
 
-		// Draw the grid canvas onto the graph canvas with offset
-		opts := &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(g.CanvasOffsetX, g.CanvasOffsetY)
-		graphCanvas.DrawImage(gridCanvas, opts)
-	}
+		// Draw edges
+		for _, edge := range g.Sim.Graph.Edges {
+			// Get node positions
+			node1 := g.Sim.Graph.Nodes[edge[0]]
+			node2 := g.Sim.Graph.Nodes[edge[1]]
 
-	// Draw edges
-	for _, edge := range g.Sim.Graph.Edges {
-		// Get the connected nodes
-		node1 := g.Sim.Graph.Nodes[edge[0]]
-		node2 := g.Sim.Graph.Nodes[edge[1]]
+			// Convert node positions to screen coordinates
+			x1 := float64(node1.X)*g.ZoomLevel + g.CanvasOffsetX
+			y1 := float64(node1.Y)*g.ZoomLevel + g.CanvasOffsetY
+			x2 := float64(node2.X)*g.ZoomLevel + g.CanvasOffsetX
+			y2 := float64(node2.Y)*g.ZoomLevel + g.CanvasOffsetY
 
-		// Determine edge color based on visited state and selection
-		edgeColor := color.RGBA{150, 150, 150, 255} // Default gray
+			// Check if edge is visible on screen
+			if x1 < float64(screenWidth) && x2 < float64(screenWidth) &&
+				x1 > 0 && x2 > 0 &&
+				y1 < float64(screenHeight) && y2 < float64(screenHeight) &&
+				y1 > 0 && y2 > 0 {
 
-		// Check if the edge is selected
-		isSelected := false
-		for _, selectedEdge := range g.SelectedEdges {
-			// Check for both directions of the edge
-			if (selectedEdge[0] == edge[0] && selectedEdge[1] == edge[1]) || (selectedEdge[0] == edge[1] && selectedEdge[1] == edge[0]) {
-				isSelected = true
-				break
+				// Draw edge
+				edgeColor := color.RGBA{100, 100, 100, 255}
+				draw.DrawCachedLine(g.graphCanvas, x1, y1, x2, y2, edgeColor)
 			}
 		}
 
-		if isSelected {
-			edgeColor = color.RGBA{255, 215, 0, 255} // Gold color for selected edges
-		} else if g.Sim.Mode != algorithms.ModeIdle {
-			// Check if both nodes are visited
-			if g.Sim.Visited[edge[0]] && g.Sim.Visited[edge[1]] {
-				edgeColor = color.RGBA{100, 180, 100, 255} // Green for visited
+		// Draw nodes
+		for i, node := range g.Sim.Graph.Nodes {
+			// Convert node position to screen coordinates
+			x := float64(node.X)*g.ZoomLevel + g.CanvasOffsetX
+			y := float64(node.Y)*g.ZoomLevel + g.CanvasOffsetY
+
+			// Check if node is visible on screen
+			if x < float64(screenWidth) && x > 0 && y < float64(screenHeight) && y > 0 {
+				// Determine node color based on state
+				var nodeColor color.RGBA
+				if i == g.Sim.Current {
+					nodeColor = color.RGBA{255, 69, 0, 255} // Red-orange for current node
+				} else if g.Sim.Visited[i] {
+					nodeColor = color.RGBA{50, 205, 50, 255} // Lime green for visited nodes
+				} else {
+					nodeColor = color.RGBA{70, 130, 180, 255} // Cornflower blue for unvisited nodes
+				}
+
+				// Draw node
+				draw.DrawCachedCircle(g.graphCanvas, int(x), int(y), int(20*g.ZoomLevel), nodeColor)
+
+				// Draw node label
+				label := string(rune('A' + i))
+				text.Draw(g.graphCanvas, label, basicfont.Face7x13, int(x)-3, int(y)+4, color.White)
 			}
 		}
 
-		// Apply canvas offset and zoom for movement
-		x1 := float64(node1.X)*g.ZoomLevel + g.CanvasOffsetX
-		y1 := float64(node1.Y)*g.ZoomLevel + g.CanvasOffsetY
-		x2 := float64(node2.X)*g.ZoomLevel + g.CanvasOffsetX
-		y2 := float64(node2.Y)*g.ZoomLevel + g.CanvasOffsetY
-
-		// Draw the edge
-		draw.DrawLine(graphCanvas, x1, y1, x2, y2, edgeColor)
+		g.canvasNeedsRedraw = false
 	}
 
-	// Draw nodes
-	for i, node := range g.Sim.Graph.Nodes {
-		// Determine node color based on state
-		var nodeColor color.RGBA
-
-		// Check if the node is selected
-		isSelected := false
-		for _, selectedNodeIndex := range g.SelectedNodes {
-			if selectedNodeIndex == i {
-				isSelected = true
-				break
-			}
-		}
-
-		if isSelected {
-			nodeColor = color.RGBA{255, 215, 0, 255} // Gold color for selected nodes
-		} else if g.StartNode == i {
-			nodeColor = color.RGBA{60, 120, 200, 255} // Blue for start node
-		} else if g.Sim.Mode != algorithms.ModeIdle && g.Sim.Current == i {
-			nodeColor = color.RGBA{220, 100, 100, 255} // Red for current
-		} else if g.Sim.Mode != algorithms.ModeIdle && g.Sim.LastActive == i {
-			nodeColor = color.RGBA{200, 150, 100, 255} // Orange for last active
-		} else if g.Sim.Mode != algorithms.ModeIdle && g.Sim.Visited[i] {
-			nodeColor = color.RGBA{100, 180, 100, 255} // Green for visited
-		} else {
-			nodeColor = color.RGBA{200, 200, 200, 255} // Light gray for unvisited
-		}
-
-		// Apply canvas offset and zoom for movement
-		nodeX := int(float64(node.X)*g.ZoomLevel + g.CanvasOffsetX)
-		nodeY := int(float64(node.Y)*g.ZoomLevel + g.CanvasOffsetY)
-		nodeRadius := int(20 * g.ZoomLevel) // Scale node radius with zoom
-
-		// Draw the node
-		draw.DrawCircle(graphCanvas, nodeX, nodeY, nodeRadius, nodeColor)
-
-		// Draw the node label (A, B, C, etc.)
-		label := string(rune('A' + i))
-		text.Draw(graphCanvas, label, basicfont.Face7x13, nodeX-4, nodeY+4, color.Black)
-	}
-
-	// Draw the graph canvas onto the main screen
-	opts := &ebiten.DrawImageOptions{}
-	screen.DrawImage(graphCanvas, opts)
+	// Draw the cached graph canvas
+	screen.DrawImage(g.graphCanvas, nil)
 
 	// Draw selection box if selecting
 	if g.Selecting {
@@ -211,9 +191,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		messageBgY := screenHeight - 80 // Adjust position
 		messageBg := ebiten.NewImage(messageBgWidth, messageBgHeight)
 		messageBg.Fill(color.RGBA{50, 50, 50, 200}) // Dark gray with transparency
-		opts := &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(float64(messageBgX), float64(messageBgY))
-		screen.DrawImage(messageBg, opts)
+		messageOpts := &ebiten.DrawImageOptions{}
+		messageOpts.GeoM.Translate(float64(messageBgX), float64(messageBgY))
+		screen.DrawImage(messageBg, messageOpts)
 
 		// Message text
 		messageText := g.Message
@@ -233,9 +213,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	sliderBgY := screenHeight - 30 // Adjust position
 	sliderBg := ebiten.NewImage(sliderBgWidth, sliderBgHeight)
 	sliderBg.Fill(color.RGBA{80, 80, 80, 255})
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(sliderBgX), float64(sliderBgY))
-	screen.DrawImage(sliderBg, opts)
+	sliderOpts := &ebiten.DrawImageOptions{}
+	sliderOpts.GeoM.Translate(float64(sliderBgX), float64(sliderBgY))
+	screen.DrawImage(sliderBg, sliderOpts)
 
 	// Handle
 	handleWidth := 10
@@ -245,9 +225,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	handleY := sliderBgY
 	handle := ebiten.NewImage(handleWidth, handleHeight)
 	handle.Fill(color.RGBA{200, 200, 200, 255})
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(handleX), float64(handleY))
-	screen.DrawImage(handle, opts)
+	handleOpts := &ebiten.DrawImageOptions{}
+	handleOpts.GeoM.Translate(float64(handleX), float64(handleY))
+	screen.DrawImage(handle, handleOpts)
 
 	// Speed label
 	speedLabel := fmt.Sprintf("Speed: %d", 50-g.StepDelay+10)

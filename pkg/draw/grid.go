@@ -81,6 +81,49 @@ func DrawGrid(screen *ebiten.Image, width, height int, config GridConfig) {
 	}
 }
 
+// DrawOptimizedGrid renders a grid on the screen with optimizations
+func DrawOptimizedGrid(screen *ebiten.Image, width, height int, config GridConfig) {
+	// Create cached line images for minor and major lines
+	minorLineImg := ebiten.NewImage(1, 1)
+	minorLineImg.Fill(config.MinorColor)
+	majorLineImg := ebiten.NewImage(1, 1)
+	majorLineImg.Fill(config.MajorColor)
+
+	// Draw horizontal grid lines
+	for y := 0; y < height; y += config.CellSize {
+		// Choose line image based on whether it's a major line
+		lineImg := minorLineImg
+		if y%(config.CellSize*config.MajorLineEvery) == 0 {
+			lineImg = majorLineImg
+		}
+
+		// Create transform options
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Scale(float64(width), 1)
+		opts.GeoM.Translate(0, float64(y))
+
+		// Draw the line
+		screen.DrawImage(lineImg, opts)
+	}
+
+	// Draw vertical grid lines
+	for x := 0; x < width; x += config.CellSize {
+		// Choose line image based on whether it's a major line
+		lineImg := minorLineImg
+		if x%(config.CellSize*config.MajorLineEvery) == 0 {
+			lineImg = majorLineImg
+		}
+
+		// Create transform options
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Scale(1, float64(height))
+		opts.GeoM.Translate(float64(x), 0)
+
+		// Draw the line
+		screen.DrawImage(lineImg, opts)
+	}
+}
+
 // SnapToGrid aligns coordinates to the nearest grid intersection
 func SnapToGrid(x, y int, cellSize int) (int, int) {
 	return int(math.Round(float64(x)/float64(cellSize))) * cellSize,

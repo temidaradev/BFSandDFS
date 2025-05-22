@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -15,6 +16,22 @@ import (
 
 // Update handles user input and simulation updates
 func (g *Game) Update() error {
+	// Frame rate limiting
+	now := time.Now()
+	elapsed := now.Sub(g.lastFrameTime)
+	if elapsed < time.Second/60 { // Target 60 FPS
+		return nil
+	}
+	g.lastFrameTime = now
+
+	// Update FPS counter
+	g.frameCount++
+	if now.Sub(g.lastFPSUpdate) >= time.Second {
+		g.fps = g.frameCount
+		g.frameCount = 0
+		g.lastFPSUpdate = now
+	}
+
 	// Get window dimensions for calculations
 	screenWidth, screenHeight := ebiten.WindowSize()
 
@@ -26,16 +43,22 @@ func (g *Game) Update() error {
 		g.MessageTimer--
 	}
 
-	// Handle button hover state
-	for _, btn := range g.Buttons {
-		// Calculate button position based on anchoring
-		btnX, btnY := g.getAdjustedButtonPosition(btn)
-		btn.Hover = g.MouseX >= btnX && g.MouseX <= btnX+btn.Width &&
-			g.MouseY >= btnY && g.MouseY <= btnY+btn.Height
-	}
+	// Only update button hover states if mouse has moved
+	if g.MouseX != g.lastMouseX || g.MouseY != g.lastMouseY {
+		// Handle button hover state
+		for _, btn := range g.Buttons {
+			// Calculate button position based on anchoring
+			btnX, btnY := g.getAdjustedButtonPosition(btn)
+			btn.Hover = g.MouseX >= btnX && g.MouseX <= btnX+btn.Width &&
+				g.MouseY >= btnY && g.MouseY <= btnY+btn.Height
+		}
 
-	// Update context menu hover states
-	g.ContextMenu.UpdateHoverState(g.MouseX, g.MouseY)
+		// Update context menu hover states
+		g.ContextMenu.UpdateHoverState(g.MouseX, g.MouseY)
+
+		g.lastMouseX = g.MouseX
+		g.lastMouseY = g.MouseY
+	}
 
 	// Handle canvas dragging (middle mouse button or right mouse button with shift)
 	if (inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonMiddle) ||
@@ -609,7 +632,7 @@ func (g *Game) Update() error {
 		g.canvasNeedsRedraw = true
 	}
 
-	// Auto-stepping
+	// Auto-stepping with frame rate consideration
 	if g.AutoStep && !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
 		g.StepCounter++
 		if g.StepCounter >= g.StepDelay {
@@ -619,6 +642,13 @@ func (g *Game) Update() error {
 	} else if g.AutoStep && g.Sim.Mode == algorithms.ModeAVL {
 		// Disable auto-stepping when in AVL mode
 		g.AutoStep = false
+	}
+
+	// Only update canvas if necessary
+	currentState := g.generateGraphStateHash()
+	if currentState != g.lastGraphState {
+		g.canvasNeedsRedraw = true
+		g.lastGraphState = currentState
 	}
 
 	// Handle keyboard controls for convenience
