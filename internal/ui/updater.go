@@ -72,8 +72,7 @@ func (g *Game) Update() error {
 
 	if g.CanvasDragging {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) ||
-			(ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) && ebiten.IsKeyPressed(ebiten.KeyShift)) {
-			// Update canvas offset based on mouse movement
+			(ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) && ebiten.IsKeyPressed(ebiten.KeyShift)) {		// Update canvas offset based on mouse movement
 			deltaX := g.MouseX - g.CanvasDragStartX
 			deltaY := g.MouseY - g.CanvasDragStartY
 
@@ -81,22 +80,34 @@ func (g *Game) Update() error {
 			newOffsetX := g.CanvasOffsetX + float64(deltaX)
 			newOffsetY := g.CanvasOffsetY + float64(deltaY)
 
-			// Calculate grid boundaries with zoom
-			gridSize := float64(1000) // Same as in drawer.go
-			minOffset := -gridSize*g.ZoomLevel + float64(screenWidth)
-			maxOffset := float64(0)
+			// Get screen dimensions for boundary calculation
+			screenWidth, screenHeight := ebiten.WindowSize()
 
-			// Limit movement within grid boundaries
-			if newOffsetX > maxOffset {
-				newOffsetX = maxOffset
-			} else if newOffsetX < minOffset {
-				newOffsetX = minOffset
+			// Calculate proper grid boundaries (fixed size, no zoom)
+			gridSize := float64(1000) // Same as in drawer.go
+
+			// Only apply boundary constraints if the grid is larger than the screen
+			// If grid is smaller than screen, allow free positioning
+			if gridSize > float64(screenWidth) {
+				// Grid wider than screen - constrain X
+				maxOffsetX := float64(0)
+				minOffsetX := float64(screenWidth) - gridSize
+				if newOffsetX > maxOffsetX {
+					newOffsetX = maxOffsetX
+				} else if newOffsetX < minOffsetX {
+					newOffsetX = minOffsetX
+				}
 			}
 
-			if newOffsetY > maxOffset {
-				newOffsetY = maxOffset
-			} else if newOffsetY < minOffset {
-				newOffsetY = minOffset
+			if gridSize > float64(screenHeight) {
+				// Grid taller than screen - constrain Y
+				maxOffsetY := float64(0)
+				minOffsetY := float64(screenHeight) - gridSize
+				if newOffsetY > maxOffsetY {
+					newOffsetY = maxOffsetY
+				} else if newOffsetY < minOffsetY {
+					newOffsetY = minOffsetY
+				}
 			}
 
 			// Update offsets
@@ -408,11 +419,25 @@ func (g *Game) Update() error {
 			}
 
 			// Check for slider interaction in the HUD area
-			if g.MouseY >= screenHeight-60 && g.MouseY <= screenHeight-40 &&
-				g.MouseX >= screenWidth-220 && g.MouseX <= screenWidth-20 {
+			sliderBgWidth := 200
+			sliderBgHeight := 20
+			sliderBgX := screenWidth - sliderBgWidth - 20
+			sliderBgY := screenHeight - 30
+
+			if g.MouseY >= sliderBgY && g.MouseY <= sliderBgY+sliderBgHeight &&
+				g.MouseX >= sliderBgX && g.MouseX <= sliderBgX+sliderBgWidth {
 				g.SliderDragging = true
 				// Update slider position immediately
-				g.StepDelay = 50 - int((float64(g.MouseX-(screenWidth-220))/200.0)*40)
+				relativeX := float64(g.MouseX - sliderBgX)
+				if relativeX < 0 {
+					relativeX = 0
+				} else if relativeX > float64(sliderBgWidth) {
+					relativeX = float64(sliderBgWidth)
+				}
+
+				// Convert relative position to StepDelay (50 to 10)
+				// Left side = slow (high delay), right side = fast (low delay)
+				g.StepDelay = 50 - int((relativeX/float64(sliderBgWidth))*40)
 				if g.StepDelay < 10 {
 					g.StepDelay = 10
 				} else if g.StepDelay > 50 {
@@ -429,12 +454,12 @@ func (g *Game) Update() error {
 				// Check if clicked on a node for dragging or selection
 				targetNode := -1
 				for i, node := range g.Sim.Graph.Nodes {
-					nodeCanvasX := float64(node.X) * g.ZoomLevel
-					nodeCanvasY := float64(node.Y) * g.ZoomLevel
+					nodeCanvasX := float64(node.X)
+					nodeCanvasY := float64(node.Y)
 					dx := canvasX - nodeCanvasX
 					dy := canvasY - nodeCanvasY
 					dist := dx*dx + dy*dy
-					if dist <= (20*g.ZoomLevel)*(20*g.ZoomLevel) { // Within the zoomed node radius
+					if dist <= 20*20 { // Within the node radius (fixed at 20)
 						targetNode = i
 						break
 					}
@@ -513,17 +538,17 @@ func (g *Game) Update() error {
 				} else if targetNode == -1 && len(g.Sim.Graph.Nodes) < 15 && !g.Selecting && !g.DraggingSelection {
 					// If clicked on empty area and not selecting/dragging selection, add node
 					// Snap to grid if enabled (in canvas coordinates)
-					nodeX, nodeY := int(canvasX/g.ZoomLevel), int(canvasY/g.ZoomLevel)
+					nodeX, nodeY := int(canvasX), int(canvasY)
 					if g.SnapToGrid {
 						nodeX, nodeY = draw.SnapToGrid(nodeX, nodeY, g.GridConfig.CellSize)
 					}
 
-					// Keep node within grid boundaries (adjusting for zoom)
+					// Keep node within grid boundaries (no zoom adjustment needed)
 					gridSize := 1000.0 // Same as in drawer.go
-					minCanvasX := 20.0 / g.ZoomLevel
-					maxCanvasX := (gridSize - 20.0) / g.ZoomLevel
-					minCanvasY := 20.0 / g.ZoomLevel
-					maxCanvasY := (gridSize - 20.0) / g.ZoomLevel
+					minCanvasX := 20.0
+					maxCanvasX := gridSize - 20.0
+					minCanvasY := 20.0
+					maxCanvasY := gridSize - 20.0
 
 					nodeX = int(math.Max(minCanvasX, math.Min(maxCanvasX, float64(nodeX))))
 					nodeY = int(math.Max(minCanvasY, math.Min(maxCanvasY, float64(nodeY))))
@@ -552,29 +577,52 @@ func (g *Game) Update() error {
 		g.MouseReleased = false
 	}
 
+	// Handle continuous slider dragging
+	if g.SliderDragging && ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		sliderBgWidth := 200
+		sliderBgX := screenWidth - sliderBgWidth - 20
+
+		// Update slider position while dragging
+		relativeX := float64(g.MouseX - sliderBgX)
+		if relativeX < 0 {
+			relativeX = 0
+		} else if relativeX > float64(sliderBgWidth) {
+			relativeX = float64(sliderBgWidth)
+		}
+
+		// Convert relative position to StepDelay (50 to 10)
+		// Left side = slow (high delay), right side = fast (low delay)
+		g.StepDelay = 50 - int((relativeX/float64(sliderBgWidth))*40)
+		if g.StepDelay < 10 {
+			g.StepDelay = 10
+		} else if g.StepDelay > 50 {
+			g.StepDelay = 50
+		}
+	}
+
 	// Handle dragging a node (if not dragging a selection)
 	if g.DraggingNode != -1 && !g.DraggingSelection {
 		// Convert mouse position to canvas coordinates
 		canvasX := float64(g.MouseX) - g.CanvasOffsetX
 		canvasY := float64(g.MouseY) - g.CanvasOffsetY
 
-		// Convert canvas coordinates back to node coordinates (undoing zoom)
-		nodeX := int(canvasX / g.ZoomLevel)
-		nodeY := int(canvasY / g.ZoomLevel)
+		// Convert canvas coordinates to node coordinates (no zoom scaling)
+		nodeX := int(canvasX)
+		nodeY := int(canvasY)
 
 		// Snap to grid if enabled
 		if g.SnapToGrid {
 			nodeX, nodeY = draw.SnapToGrid(nodeX, nodeY, g.GridConfig.CellSize)
 		}
 
-		// Keep node within grid boundaries
+		// Keep node within grid boundaries (no zoom adjustment needed)
 		gridSize := 1000.0 // Same as in drawer.go
-		minCanvasX := 20.0 / g.ZoomLevel
-		maxCanvasX := (gridSize - 20.0) / g.ZoomLevel
-		minCanvasY := 20.0 / g.ZoomLevel
-		maxCanvasY := (gridSize - 20.0) / g.ZoomLevel
+		minCanvasX := 20.0
+		maxCanvasX := gridSize - 20.0
+		minCanvasY := 20.0
+		maxCanvasY := gridSize - 20.0
 
-		// Convert grid boundaries back to node coordinate system for clamping
+		// Convert grid boundaries to node coordinate system for clamping
 		minNodeX := int(minCanvasX)
 		maxNodeX := int(maxCanvasX)
 		minNodeY := int(minCanvasY)
@@ -597,23 +645,23 @@ func (g *Game) Update() error {
 		// Move all selected nodes
 		for _, nodeIndex := range g.SelectedNodes {
 			// Convert current node position to screen coordinates
-			nodeScreenX := float64(g.Sim.Graph.Nodes[nodeIndex].X)*g.ZoomLevel + g.CanvasOffsetX
-			nodeScreenY := float64(g.Sim.Graph.Nodes[nodeIndex].Y)*g.ZoomLevel + g.CanvasOffsetY
+			nodeScreenX := float64(g.Sim.Graph.Nodes[nodeIndex].X) + g.CanvasOffsetX
+			nodeScreenY := float64(g.Sim.Graph.Nodes[nodeIndex].Y) + g.CanvasOffsetY
 
 			// Calculate new screen position after applying delta
 			newNodeScreenX := nodeScreenX + deltaX
 			newNodeScreenY := nodeScreenY + deltaY
 
-			// Convert new screen position back to node coordinates (undoing offset and zoom)
-			newNodeX := int((newNodeScreenX - g.CanvasOffsetX) / g.ZoomLevel)
-			newNodeY := int((newNodeScreenY - g.CanvasOffsetY) / g.ZoomLevel)
+			// Convert new screen position back to node coordinates (undoing offset, no zoom)
+			newNodeX := int(newNodeScreenX - g.CanvasOffsetX)
+			newNodeY := int(newNodeScreenY - g.CanvasOffsetY)
 
 			// Snap to grid if enabled (apply to the new node coordinates)
 			if g.SnapToGrid {
 				newNodeX, newNodeY = draw.SnapToGrid(newNodeX, newNodeY, g.GridConfig.CellSize)
 			}
 
-			// Keep node within grid boundaries (adjusting for zoom is already done in calculation)
+			// Keep node within grid boundaries (no zoom adjustment needed)
 			gridSize := 1000.0 // Same as in drawer.go
 			minNodeCoord := 20.0
 			maxNodeCoord := gridSize - 20.0
@@ -657,211 +705,6 @@ func (g *Game) Update() error {
 	// Handle help toggle
 	if inpututil.IsKeyJustPressed(ebiten.KeyH) {
 		g.ShowHelp = !g.ShowHelp
-	}
-
-	// Handle zoom with mouse wheel
-	if _, wheelY := ebiten.Wheel(); wheelY != 0 {
-		// Get mouse position in canvas coordinates
-		canvasX := g.MouseX - int(g.CanvasOffsetX)
-		canvasY := g.MouseY - int(g.CanvasOffsetY)
-
-		// Calculate zoom factor (0.1 per wheel step)
-		zoomFactor := 1.0 + wheelY*0.1
-		newZoom := g.ZoomLevel * zoomFactor
-
-		// Limit zoom range (0.5x to 2.0x)
-		if newZoom >= 0.5 && newZoom <= 2.0 {
-			// Calculate new offset to zoom towards mouse position
-			newOffsetX := float64(g.MouseX) - float64(canvasX)*newZoom
-			newOffsetY := float64(g.MouseY) - float64(canvasY)*newZoom
-
-			// Get screen dimensions
-			screenWidth, _ := ebiten.WindowSize()
-
-			// Calculate grid boundaries
-			gridSize := float64(1000) // Same as in drawer.go
-			minOffset := -gridSize*newZoom + float64(screenWidth)
-			maxOffset := float64(0)
-
-			// Ensure new offset stays within grid boundaries
-			if newOffsetX > maxOffset {
-				newOffsetX = maxOffset
-			} else if newOffsetX < minOffset {
-				newOffsetX = minOffset
-			}
-
-			if newOffsetY > maxOffset {
-				newOffsetY = maxOffset
-			} else if newOffsetY < minOffset {
-				newOffsetY = minOffset
-			}
-
-			// Update zoom and offset
-			g.ZoomLevel = newZoom
-			g.CanvasOffsetX = newOffsetX
-			g.CanvasOffsetY = newOffsetY
-			g.canvasNeedsRedraw = true
-		}
-	}
-
-	// Handle pinch zoom for touchpads (assuming a multi-touch or trackpad gesture)
-	// Ebiten's inpututil doesn't have explicit pinch gesture detection.
-	// A common approach is to track two touch points or use platform-specific libraries.
-	// For a simple implementation, we can approximate by checking for two touch points
-	// and calculating the distance between them.
-
-	// Get active touch IDs
-	touchIDs := ebiten.TouchIDs()
-
-	// Check for at least two touch points (simulating pinch)
-	if len(touchIDs) >= 2 {
-		// Get the positions of the first two touch points
-		p1x, p1y := ebiten.TouchPosition(touchIDs[0])
-		p2x, p2y := ebiten.TouchPosition(touchIDs[1])
-
-		// Calculate the distance between the touch points
-		distance := math.Sqrt(math.Pow(float64(p1x-p2x), 2) + math.Pow(float64(p1y-p2y), 2))
-
-		// Store the initial distance when the pinch starts
-		if !g.Pinching {
-			g.Pinching = true
-			g.InitialPinchDistance = distance
-			// Store the center of the pinch for zooming towards that point
-			g.PinchCenterX = (p1x + p2x) / 2
-			g.PinchCenterY = (p1y + p2y) / 2
-		} else {
-			// Calculate the zoom factor based on the change in distance
-			zoomFactor := distance / g.InitialPinchDistance
-			newZoom := g.ZoomLevel * zoomFactor
-
-			// Limit zoom range (0.5x to 2.0x)
-			if newZoom >= 0.5 && newZoom <= 2.0 {
-				// Calculate zoom center in canvas coordinates
-				canvasCenterX := float64(g.PinchCenterX) - g.CanvasOffsetX
-				canvasCenterY := float64(g.PinchCenterY) - g.CanvasOffsetY
-
-				// Calculate new offset to zoom towards the pinch center
-				newOffsetX := float64(g.PinchCenterX) - canvasCenterX*newZoom
-				newOffsetY := float64(g.PinchCenterY) - canvasCenterY*newZoom
-
-				// Get screen dimensions
-				screenWidth, _ := ebiten.WindowSize()
-
-				// Calculate grid boundaries
-				gridSize := float64(1000) // Same as in drawer.go
-				minOffset := -gridSize*newZoom + float64(screenWidth)
-				maxOffset := float64(0)
-
-				// Ensure new offset stays within grid boundaries
-				if newOffsetX > maxOffset {
-					newOffsetX = maxOffset
-				} else if newOffsetX < minOffset {
-					newOffsetX = minOffset
-				}
-
-				if newOffsetY > maxOffset {
-					newOffsetY = maxOffset
-				} else if newOffsetY < minOffset {
-					newOffsetY = minOffset
-				}
-
-				// Update zoom and offset
-				g.ZoomLevel = newZoom
-				g.CanvasOffsetX = newOffsetX
-				g.CanvasOffsetY = newOffsetY
-				g.canvasNeedsRedraw = true
-			}
-
-			// Update initial pinch distance for the next frame
-			g.InitialPinchDistance = distance
-		}
-	} else {
-		// If less than two touch points, reset pinching state
-		g.Pinching = false
-	}
-
-	// Handle zoom with keyboard shortcuts
-	if ebiten.IsKeyPressed(ebiten.KeyEqual) {
-		// Zoom in
-		newZoom := g.ZoomLevel * 1.1
-		if newZoom <= 2.0 {
-			// Get screen dimensions
-			screenWidth, _ := ebiten.WindowSize()
-
-			// Calculate grid boundaries
-			gridSize := float64(1000) // Same as in drawer.go
-			minOffset := -gridSize*newZoom + float64(screenWidth)
-			maxOffset := float64(0)
-
-			// Calculate new offset to keep center point
-			centerX := float64(screenWidth/2) - g.CanvasOffsetX
-			centerY := float64(screenWidth/2) - g.CanvasOffsetY
-			newOffsetX := float64(screenWidth/2) - centerX*newZoom
-			newOffsetY := float64(screenWidth/2) - centerY*newZoom
-
-			// Ensure new offset stays within grid boundaries
-			if newOffsetX > maxOffset {
-				newOffsetX = maxOffset
-			} else if newOffsetX < minOffset {
-				newOffsetX = minOffset
-			}
-
-			if newOffsetY > maxOffset {
-				newOffsetY = maxOffset
-			} else if newOffsetY < minOffset {
-				newOffsetY = minOffset
-			}
-
-			// Update zoom and offset
-			g.ZoomLevel = newZoom
-			g.CanvasOffsetX = newOffsetX
-			g.CanvasOffsetY = newOffsetY
-		}
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyMinus) {
-		// Zoom out
-		newZoom := g.ZoomLevel * 0.9
-		if newZoom >= 0.5 {
-			// Get screen dimensions
-			screenWidth, _ := ebiten.WindowSize()
-
-			// Calculate grid boundaries
-			gridSize := float64(1000) // Same as in drawer.go
-			minOffset := -gridSize*newZoom + float64(screenWidth)
-			maxOffset := float64(0)
-
-			// Calculate new offset to keep center point
-			centerX := float64(screenWidth/2) - g.CanvasOffsetX
-			centerY := float64(screenWidth/2) - g.CanvasOffsetY
-			newOffsetX := float64(screenWidth/2) - centerX*newZoom
-			newOffsetY := float64(screenWidth/2) - centerY*newZoom
-
-			// Ensure new offset stays within grid boundaries
-			if newOffsetX > maxOffset {
-				newOffsetX = maxOffset
-			} else if newOffsetX < minOffset {
-				newOffsetX = minOffset
-			}
-
-			if newOffsetY > maxOffset {
-				newOffsetY = maxOffset
-			} else if newOffsetY < minOffset {
-				newOffsetY = minOffset
-			}
-
-			// Update zoom and offset
-			g.ZoomLevel = newZoom
-			g.CanvasOffsetX = newOffsetX
-			g.CanvasOffsetY = newOffsetY
-		}
-	}
-	if ebiten.IsKeyPressed(ebiten.Key0) {
-		// Reset zoom and center the view
-		screenWidth, screenHeight := ebiten.WindowSize()
-		gridSize := float64(1000) // Same as in drawer.go
-		g.ZoomLevel = 1.0
-		g.CanvasOffsetX = (float64(screenWidth) - gridSize) / 2
-		g.CanvasOffsetY = (float64(screenHeight) - gridSize) / 2
 	}
 
 	return nil
@@ -931,8 +774,8 @@ func (g *Game) finalizeSelection(startX, startY, endX, endY int) {
 	// Identify nodes within the selection box
 	for i, node := range g.Sim.Graph.Nodes {
 		// Convert node position to screen coordinates
-		nodeScreenX := int(float64(node.X)*g.ZoomLevel + g.CanvasOffsetX)
-		nodeScreenY := int(float64(node.Y)*g.ZoomLevel + g.CanvasOffsetY)
+		nodeScreenX := int(float64(node.X) + g.CanvasOffsetX)
+		nodeScreenY := int(float64(node.Y) + g.CanvasOffsetY)
 
 		// Check if node is within the selection box boundaries
 		if nodeScreenX >= left && nodeScreenX <= right && nodeScreenY >= top && nodeScreenY <= bottom {
@@ -950,10 +793,10 @@ func (g *Game) finalizeSelection(startX, startY, endX, endY int) {
 		node2 := g.Sim.Graph.Nodes[edge[1]]
 
 		// Convert node positions to screen coordinates
-		x1 := float64(node1.X)*g.ZoomLevel + g.CanvasOffsetX
-		y1 := float64(node1.Y)*g.ZoomLevel + g.CanvasOffsetY
-		x2 := float64(node2.X)*g.ZoomLevel + g.CanvasOffsetX
-		y2 := float64(node2.Y)*g.ZoomLevel + g.CanvasOffsetY
+		x1 := float64(node1.X) + g.CanvasOffsetX
+		y1 := float64(node1.Y) + g.CanvasOffsetY
+		x2 := float64(node2.X) + g.CanvasOffsetX
+		y2 := float64(node2.Y) + g.CanvasOffsetY
 
 		// Check if the edge intersects the selection box
 		// A simple check: if both endpoints are within the box, select the edge.

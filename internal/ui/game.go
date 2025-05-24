@@ -162,7 +162,6 @@ type Game struct {
 	Message      string
 	MessageTimer int
 
-	ZoomLevel float64 // Add zoom level
 	ShowHelp  bool    // Add help overlay toggle
 
 	// AVL Input Modal
@@ -180,12 +179,6 @@ type Game struct {
 	DraggingSelection   bool     // Whether a selected group is being dragged
 	SelectionDragStartX float64  // X position where dragging of selection started (canvas coords)
 	SelectionDragStartY float64  // Y position where dragging of selection started (canvas coords)
-
-	// Pinch zoom features
-	Pinching             bool    // Whether the user is currently pinching
-	InitialPinchDistance float64 // The distance between touch points when pinching started
-	PinchCenterX         int     // The X coordinate of the pinch center
-	PinchCenterY         int     // The Y coordinate
 
 	// Performance optimization fields
 	lastFrameTime time.Time
@@ -214,7 +207,6 @@ func NewGame(sim *simulator.Simulator) *Game {
 		CanvasOffsetX:  0, // Initial canvas offset
 		CanvasOffsetY:  0, // Initial canvas offset
 		CanvasDragging: false,
-		ZoomLevel:      1.0,   // Initialize zoom level to 1.0 (100%)
 		ShowHelp:       false, // Initialize help overlay as hidden
 
 		// Initialize cached canvases
@@ -270,9 +262,10 @@ func (g *Game) createButtons() {
 	margin := 20
 
 	// Fixed positions for button rows (bottom to top)
-	bottomRowY := 50 // BFS, DFS, Step, Auto, Reset
+	bottomRowY := 50 // BFS, DFS, AVL Tree, Step, Auto, Reset
 	middleRowY := 90 // New Graph, Load, Save, Add Edge, Del Edge, Add Node, Del Node
 	topRowY := 130   // Reset View, Grid, Snap, Edit Mode
+	avlRowY := 170   // Insert, Delete, Search (AVL operations)
 
 	// Create bottom row buttons - algorithm execution controls
 	buttons := []*Button{
@@ -296,6 +289,16 @@ func (g *Game) createButtons() {
 		},
 		{
 			X: margin + 2*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "AVL Tree", BgColor: purpleBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode == algorithms.ModeIdle {
+					g.Sim.StartAVL()
+					g.showMessage("AVL Tree mode started. Use Insert/Delete/Search buttons.")
+				}
+			},
+		},
+		{
+			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Step", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
@@ -304,7 +307,7 @@ func (g *Game) createButtons() {
 			},
 		},
 		{
-			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
+			X: margin + 4*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Auto", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
@@ -313,7 +316,7 @@ func (g *Game) createButtons() {
 			},
 		},
 		{
-			X: margin + 4*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
+			X: margin + 5*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Reset", BgColor: redBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				g.Sim.Reset()
@@ -463,9 +466,47 @@ func (g *Game) createButtons() {
 		},
 	}
 
+	// Create AVL operation buttons - only shown when in AVL mode
+	avlRowButtons := []*Button{
+		{
+			X: margin, Y: avlRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Insert", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode == algorithms.ModeAVL {
+					g.AVLAction = "insert"
+					g.ShowAVLInput = true
+					g.AVLInputText = ""
+				}
+			},
+		},
+		{
+			X: margin + (buttonWidth + buttonSpacing), Y: avlRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Delete", BgColor: redBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode == algorithms.ModeAVL {
+					g.AVLAction = "delete"
+					g.ShowAVLInput = true
+					g.AVLInputText = ""
+				}
+			},
+		},
+		{
+			X: margin + 2*(buttonWidth+buttonSpacing), Y: avlRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Search", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode == algorithms.ModeAVL {
+					g.AVLAction = "search"
+					g.ShowAVLInput = true
+					g.AVLInputText = ""
+				}
+			},
+		},
+	}
+
 	// Add buttons to the game
 	buttons = append(buttons, middleRowButtons...)
 	buttons = append(buttons, topRowButtons...)
+	buttons = append(buttons, avlRowButtons...)
 	g.Buttons = buttons
 }
 

@@ -27,87 +27,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 		g.graphCanvas.Fill(color.RGBA{240, 240, 240, 255})
 
-		// Draw grid if enabled - draw it on the graph canvas so it moves with the graph
-		if g.ShowGrid {
-			// Create a temporary canvas for the grid that's larger than the screen
-			// to ensure we have enough grid lines when moving
-			gridSize := 1000 // Make it large enough to cover movement range
-			if g.gridCanvas == nil || g.gridCanvas.Bounds().Dx() != gridSize || g.gridCanvas.Bounds().Dy() != gridSize {
-				g.gridCanvas = ebiten.NewImage(gridSize, gridSize)
-			}
-			g.gridCanvas.Fill(color.RGBA{240, 240, 240, 255})
-
-			// Draw grid on the temporary canvas using optimized drawing
-			draw.DrawOptimizedGrid(g.gridCanvas, gridSize, gridSize, g.GridConfig)
-
-			// Draw grid border
-			borderColor := color.RGBA{100, 100, 100, 255}
-			// Draw top and bottom borders
-			for i := 0; i < gridSize; i++ {
-				g.gridCanvas.Set(i, 0, borderColor)
-				g.gridCanvas.Set(i, gridSize-1, borderColor)
-			}
-			// Draw left and right borders
-			for i := 0; i < gridSize; i++ {
-				g.gridCanvas.Set(0, i, borderColor)
-				g.gridCanvas.Set(gridSize-1, i, borderColor)
-			}
-
-			// Draw the grid canvas onto the graph canvas with offset
-			gridOpts := &ebiten.DrawImageOptions{}
-			gridOpts.GeoM.Translate(g.CanvasOffsetX, g.CanvasOffsetY)
-			g.graphCanvas.DrawImage(g.gridCanvas, gridOpts)
-		}
-
-		// Draw edges
-		for _, edge := range g.Sim.Graph.Edges {
-			// Get node positions
-			node1 := g.Sim.Graph.Nodes[edge[0]]
-			node2 := g.Sim.Graph.Nodes[edge[1]]
-
-			// Convert node positions to screen coordinates
-			x1 := float64(node1.X)*g.ZoomLevel + g.CanvasOffsetX
-			y1 := float64(node1.Y)*g.ZoomLevel + g.CanvasOffsetY
-			x2 := float64(node2.X)*g.ZoomLevel + g.CanvasOffsetX
-			y2 := float64(node2.Y)*g.ZoomLevel + g.CanvasOffsetY
-
-			// Check if edge is visible on screen
-			if x1 < float64(screenWidth) && x2 < float64(screenWidth) &&
-				x1 > 0 && x2 > 0 &&
-				y1 < float64(screenHeight) && y2 < float64(screenHeight) &&
-				y1 > 0 && y2 > 0 {
-
-				// Draw edge
-				edgeColor := color.RGBA{100, 100, 100, 255}
-				draw.DrawCachedLine(g.graphCanvas, x1, y1, x2, y2, edgeColor)
-			}
-		}
-
-		// Draw nodes
-		for i, node := range g.Sim.Graph.Nodes {
-			// Convert node position to screen coordinates
-			x := float64(node.X)*g.ZoomLevel + g.CanvasOffsetX
-			y := float64(node.Y)*g.ZoomLevel + g.CanvasOffsetY
-
-			// Check if node is visible on screen
-			if x < float64(screenWidth) && x > 0 && y < float64(screenHeight) && y > 0 {
-				// Determine node color based on state
-				var nodeColor color.RGBA
-				if i == g.Sim.Current {
-					nodeColor = color.RGBA{255, 69, 0, 255} // Red-orange for current node
-				} else if g.Sim.Visited[i] {
-					nodeColor = color.RGBA{50, 205, 50, 255} // Lime green for visited nodes
-				} else {
-					nodeColor = color.RGBA{70, 130, 180, 255} // Cornflower blue for unvisited nodes
-				}
-
-				// Draw node
-				draw.DrawCachedCircle(g.graphCanvas, int(x), int(y), int(20*g.ZoomLevel), nodeColor)
-
-				// Draw node label
-				label := string(rune('A' + i))
-				text.Draw(g.graphCanvas, label, basicfont.Face7x13, int(x)-3, int(y)+4, color.White)
-			}
+		// Check if we're in AVL mode and draw accordingly
+		if g.Sim.Mode == algorithms.ModeAVL {
+			// Draw AVL tree
+			g.drawAVLTree(g.graphCanvas)
+		} else {
+			// Draw normal graph
+			g.drawGraph(g.graphCanvas, screenWidth, screenHeight)
 		}
 
 		g.canvasNeedsRedraw = false
@@ -179,6 +105,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 		// Position queue/stack status below visit order
 		text.Draw(screen, dataStructStr, basicfont.Face7x13, 20, 40, color.Black)
+	} else if g.Sim.Mode == algorithms.ModeAVL {
+		// Draw AVL tree info
+		avlInfoStr := "AVL Tree Mode"
+		text.Draw(screen, avlInfoStr, basicfont.Face7x13, 20, 20, color.Black)
+
+		// Show current action if any
+		if g.Sim.GetAVLAction() != "" {
+			actionStr := fmt.Sprintf("Last Action: %s", g.Sim.GetAVLAction())
+			text.Draw(screen, actionStr, basicfont.Face7x13, 20, 40, color.Black)
+		}
+
+		// Show tree statistics
+		if g.Sim.GetAVLTree() != nil && g.Sim.GetAVLTree().Root != nil {
+			heightStr := fmt.Sprintf("Tree Height: %d", g.Sim.GetAVLTree().Root.Height)
+			text.Draw(screen, heightStr, basicfont.Face7x13, 20, 60, color.Black)
+		}
 	}
 
 	// Draw the message display
@@ -221,6 +163,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	handleWidth := 10
 	handleHeight := 20
 	// Calculate handle position based on StepDelay (50 to 10)
+	// StepDelay 50 = left side (slow), StepDelay 10 = right side (fast)
 	handleX := sliderBgX + int(float64(50-g.StepDelay)/40.0*float64(sliderBgWidth-handleWidth))
 	handleY := sliderBgY
 	handle := ebiten.NewImage(handleWidth, handleHeight)
@@ -233,11 +176,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	speedLabel := fmt.Sprintf("Speed: %d", 50-g.StepDelay+10)
 	// Position speed label to the left of the slider
 	text.Draw(screen, speedLabel, basicfont.Face7x13, sliderBgX-text.BoundString(basicfont.Face7x13, speedLabel).Dx()-10, sliderBgY+text.BoundString(basicfont.Face7x13, speedLabel).Dy()/2+basicfont.Face7x13.Ascent/2, color.Black)
-
-	// Draw Zoom level
-	zoomLabel := fmt.Sprintf("Zoom: %.1fx", g.ZoomLevel)
-	// Position zoom level near the bottom left
-	text.Draw(screen, zoomLabel, basicfont.Face7x13, 20, screenHeight-20, color.Black)
 
 	// Draw Help Overlay
 	if g.ShowHelp {
@@ -376,4 +314,168 @@ Context Menu:
 	closeText := "Press H to close"
 	closeBounds := text.BoundString(basicfont.Face7x13, closeText)
 	text.Draw(screen, closeText, basicfont.Face7x13, helpBgX+helpBgWidth-closeBounds.Dx()-20, helpBgY+helpBgHeight-20, color.Black)
+}
+
+// drawGraph draws the normal graph visualization
+func (g *Game) drawGraph(canvas *ebiten.Image, screenWidth, screenHeight int) {
+	// Draw grid if enabled - draw it on the graph canvas so it moves with the graph
+	if g.ShowGrid {
+		// Create a temporary canvas for the grid that's larger than the screen
+		// to ensure we have enough grid lines when moving
+		gridSize := 1000 // Make it large enough to cover movement range
+		if g.gridCanvas == nil || g.gridCanvas.Bounds().Dx() != gridSize || g.gridCanvas.Bounds().Dy() != gridSize {
+			g.gridCanvas = ebiten.NewImage(gridSize, gridSize)
+		}
+		g.gridCanvas.Fill(color.RGBA{240, 240, 240, 255})
+
+		// Draw grid on the temporary canvas using optimized drawing
+		draw.DrawOptimizedGrid(g.gridCanvas, gridSize, gridSize, g.GridConfig)
+
+		// Draw grid border
+		borderColor := color.RGBA{100, 100, 100, 255}
+		// Draw top and bottom borders
+		for i := 0; i < gridSize; i++ {
+			g.gridCanvas.Set(i, 0, borderColor)
+			g.gridCanvas.Set(i, gridSize-1, borderColor)
+		}
+		// Draw left and right borders
+		for i := 0; i < gridSize; i++ {
+			g.gridCanvas.Set(0, i, borderColor)
+			g.gridCanvas.Set(gridSize-1, i, borderColor)
+		}
+
+		// Draw the grid canvas onto the graph canvas with offset
+		gridOpts := &ebiten.DrawImageOptions{}
+		gridOpts.GeoM.Translate(g.CanvasOffsetX, g.CanvasOffsetY)
+		canvas.DrawImage(g.gridCanvas, gridOpts)
+	}
+
+	// Draw edges
+	for _, edge := range g.Sim.Graph.Edges {
+		// Get node positions
+		node1 := g.Sim.Graph.Nodes[edge[0]]
+		node2 := g.Sim.Graph.Nodes[edge[1]]
+
+		// Convert node positions to screen coordinates
+		x1 := float64(node1.X) + g.CanvasOffsetX
+		y1 := float64(node1.Y) + g.CanvasOffsetY
+		x2 := float64(node2.X) + g.CanvasOffsetX
+		y2 := float64(node2.Y) + g.CanvasOffsetY
+
+		// Check if edge is visible on screen
+		if x1 < float64(screenWidth) && x2 < float64(screenWidth) &&
+			x1 > 0 && x2 > 0 &&
+			y1 < float64(screenHeight) && y2 < float64(screenHeight) &&
+			y1 > 0 && y2 > 0 {
+
+			// Draw edge
+			edgeColor := color.RGBA{100, 100, 100, 255}
+			draw.DrawCachedLine(canvas, x1, y1, x2, y2, edgeColor)
+		}
+	}
+
+	// Draw nodes
+	for i, node := range g.Sim.Graph.Nodes {
+		// Convert node position to screen coordinates
+		x := float64(node.X) + g.CanvasOffsetX
+		y := float64(node.Y) + g.CanvasOffsetY
+
+		// Check if node is visible on screen
+		if x < float64(screenWidth) && x > 0 && y < float64(screenHeight) && y > 0 {
+			// Determine node color based on state
+			var nodeColor color.RGBA
+			if i == g.Sim.Current {
+				nodeColor = color.RGBA{255, 69, 0, 255} // Red-orange for current node
+			} else if g.Sim.Visited[i] {
+				nodeColor = color.RGBA{50, 205, 50, 255} // Lime green for visited nodes
+			} else {
+				nodeColor = color.RGBA{70, 130, 180, 255} // Cornflower blue for unvisited nodes
+			}
+
+			// Draw node (fixed radius of 20)
+			draw.DrawCachedCircle(canvas, int(x), int(y), 20, nodeColor)
+
+			// Draw node label
+			label := string(rune('A' + i))
+			text.Draw(canvas, label, basicfont.Face7x13, int(x)-3, int(y)+4, color.White)
+		}
+	}
+}
+
+// drawAVLTree draws the AVL tree visualization
+func (g *Game) drawAVLTree(canvas *ebiten.Image) {
+	if g.Sim.GetAVLTree() == nil || g.Sim.GetAVLTree().Root == nil {
+		return
+	}
+
+	// Update node positions for visualization
+	screenWidth, _ := ebiten.WindowSize()
+	centerX := screenWidth / 2
+	startY := 100
+	levelHeight := 80
+
+	// Update positions
+	g.Sim.GetAVLTree().UpdatePositions(centerX, startY, levelHeight)
+
+	// Draw tree nodes and edges
+	g.drawAVLNode(canvas, g.Sim.GetAVLTree().Root)
+}
+
+// drawAVLNode recursively draws an AVL tree node and its children
+func (g *Game) drawAVLNode(canvas *ebiten.Image, node *algorithms.AVLNode) {
+	if node == nil {
+		return
+	}
+
+	// Draw edges to children first (so they appear behind nodes)
+	if node.Left != nil {
+		g.drawAVLEdge(canvas, node, node.Left)
+		g.drawAVLNode(canvas, node.Left)
+	}
+	if node.Right != nil {
+		g.drawAVLEdge(canvas, node, node.Right)
+		g.drawAVLNode(canvas, node.Right)
+	}
+
+	// Draw node
+	nodeColor := color.RGBA{100, 149, 237, 255} // Cornflower blue
+	if g.Sim.GetAVLAction() == "search" && g.Sim.GetAVLValue() == node.Value {
+		nodeColor = color.RGBA{255, 69, 0, 255} // Red-orange for found node
+	}
+
+	// Apply canvas offset (no zoom scaling)
+	x := float64(node.Position.X) + g.CanvasOffsetX
+	y := float64(node.Position.Y) + g.CanvasOffsetY
+
+	// Draw node circle with border (fixed radius of 25)
+	draw.DrawCachedCircle(canvas, int(x), int(y), 25, nodeColor)
+	draw.DrawCachedCircle(canvas, int(x), int(y), 25, color.RGBA{0, 0, 0, 255}) // Black border
+
+	// Draw node value
+	valueText := fmt.Sprintf("%d", node.Value)
+	valueBounds := text.BoundString(basicfont.Face7x13, valueText)
+	text.Draw(canvas, valueText, basicfont.Face7x13,
+		int(x)-valueBounds.Dx()/2,
+		int(y)+valueBounds.Dy()/2,
+		color.White)
+
+	// Draw height below the node
+	heightText := fmt.Sprintf("h:%d", node.Height)
+	heightBounds := text.BoundString(basicfont.Face7x13, heightText)
+	text.Draw(canvas, heightText, basicfont.Face7x13,
+		int(x)-heightBounds.Dx()/2,
+		int(y)+35, // Fixed offset of 35 pixels below node
+		color.Black)
+}
+
+// drawAVLEdge draws an edge between two AVL tree nodes
+func (g *Game) drawAVLEdge(canvas *ebiten.Image, from, to *algorithms.AVLNode) {
+	// Apply canvas offset (no zoom scaling)
+	x1 := float64(from.Position.X) + g.CanvasOffsetX
+	y1 := float64(from.Position.Y) + g.CanvasOffsetY
+	x2 := float64(to.Position.X) + g.CanvasOffsetX
+	y2 := float64(to.Position.Y) + g.CanvasOffsetY
+
+	// Draw line
+	draw.DrawCachedLine(canvas, x1, y1, x2, y2, color.RGBA{0, 0, 0, 255})
 }
