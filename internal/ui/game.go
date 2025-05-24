@@ -162,7 +162,7 @@ type Game struct {
 	Message      string
 	MessageTimer int
 
-	ShowHelp  bool    // Add help overlay toggle
+	ShowHelp bool // Add help overlay toggle
 
 	// AVL Input Modal
 	ShowAVLInput  bool

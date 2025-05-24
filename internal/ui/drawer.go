@@ -300,9 +300,7 @@ Graph Editing:
   X: Delete Edge (click two nodes)
 
 View Controls:
-  Mouse Wheel: Zoom In/Out
   Middle Click / Shift+Right Click: Pan
-  0: Reset View (Zoom and Pan)
   H: Toggle Help
 
 Context Menu:

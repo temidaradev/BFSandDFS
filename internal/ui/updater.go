@@ -72,7 +72,7 @@ func (g *Game) Update() error {
 
 	if g.CanvasDragging {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) ||
-			(ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) && ebiten.IsKeyPressed(ebiten.KeyShift)) {		// Update canvas offset based on mouse movement
+			(ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) && ebiten.IsKeyPressed(ebiten.KeyShift)) { // Update canvas offset based on mouse movement
 			deltaX := g.MouseX - g.CanvasDragStartX
 			deltaY := g.MouseY - g.CanvasDragStartY
 
