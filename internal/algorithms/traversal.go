@@ -1,13 +1,20 @@
 package algorithms
 
-// TraversalMode defines whether we're using BFS, DFS, or idle
+// TraversalMode defines the current algorithm mode
 type TraversalMode int
 
 const (
 	ModeIdle TraversalMode = iota
 	ModeBFS
 	ModeDFS
-	ModeAVL // New mode for AVL tree operations
+	ModeAVL // AVL tree operations
+	ModeDijkstra
+	ModeAStar
+	ModeTopological
+	ModeKruskal
+	ModePrim
+	ModeTarjan
+	ModeKosaraju
 )
 
 // BFSStep performs one step of the BFS algorithm

@@ -262,10 +262,11 @@ func (g *Game) createButtons() {
 	margin := 20
 
 	// Fixed positions for button rows (bottom to top)
-	bottomRowY := 50 // BFS, DFS, AVL Tree, Step, Auto, Reset
-	middleRowY := 90 // New Graph, Load, Save, Add Edge, Del Edge, Add Node, Del Node
-	topRowY := 130   // Reset View, Grid, Snap, Edit Mode
-	avlRowY := 170   // Insert, Delete, Search (AVL operations)
+	bottomRowY := 50    // BFS, DFS, AVL Tree, Step, Auto, Reset
+	algorithmRowY := 90 // Dijkstra, A*, Topo Sort, Kruskal, Prim, Tarjan, Kosaraju
+	middleRowY := 130   // New Graph, Load, Save, Add Edge, Del Edge, Add Node, Del Node
+	topRowY := 170      // Reset View, Grid, Snap, Edit Mode
+	avlRowY := 210      // Insert, Delete, Search (AVL operations)
 
 	// Create bottom row buttons - algorithm execution controls
 	buttons := []*Button{
@@ -274,7 +275,12 @@ func (g *Game) createButtons() {
 			Text: "BFS", BgColor: blueBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				if g.Sim.Mode == algorithms.ModeIdle {
-					g.Sim.StartBFS(g.StartNode)
+					if g.StartNode >= 0 && g.StartNode < len(g.Sim.Graph.Nodes) {
+						g.Sim.StartBFS(g.StartNode)
+						g.showMessage("BFS started from node " + string(rune('A'+g.StartNode)))
+					} else {
+						g.showMessage("Please select a start node first")
+					}
 				}
 			},
 		},
@@ -283,7 +289,12 @@ func (g *Game) createButtons() {
 			Text: "DFS", BgColor: blueBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
 				if g.Sim.Mode == algorithms.ModeIdle {
-					g.Sim.StartDFS(g.StartNode)
+					if g.StartNode >= 0 && g.StartNode < len(g.Sim.Graph.Nodes) {
+						g.Sim.StartDFS(g.StartNode)
+						g.showMessage("DFS started from node " + string(rune('A'+g.StartNode)))
+					} else {
+						g.showMessage("Please select a start node first")
+					}
 				}
 			},
 		},
@@ -293,7 +304,12 @@ func (g *Game) createButtons() {
 			Action: func() {
 				if g.Sim.Mode == algorithms.ModeIdle {
 					g.Sim.StartAVL()
+					g.AutoStep = false // Disable auto-stepping in AVL mode
 					g.showMessage("AVL Tree mode started. Use Insert/Delete/Search buttons.")
+				} else if g.Sim.Mode == algorithms.ModeAVL {
+					g.showMessage("Already in AVL Tree mode. Use Insert/Delete/Search buttons.")
+				} else {
+					g.showMessage("Reset first to switch to AVL Tree mode.")
 				}
 			},
 		},
@@ -301,8 +317,17 @@ func (g *Game) createButtons() {
 			X: margin + 3*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Step", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
+				if g.Sim.Done {
+					g.showMessage("Algorithm has completed. Reset to start over.")
+				} else if g.Sim.Mode == algorithms.ModeIdle {
+					g.showMessage("Please select an algorithm first.")
+				} else if g.Sim.Mode == algorithms.ModeAVL {
+					g.showMessage("Step not applicable in AVL Tree mode.")
+				} else {
 					g.Sim.Update()
+					if g.Sim.Done {
+						g.showMessage("Algorithm completed!")
+					}
 				}
 			},
 		},
@@ -310,8 +335,19 @@ func (g *Game) createButtons() {
 			X: margin + 4*(buttonWidth+buttonSpacing), Y: bottomRowY, Width: buttonWidth, Height: buttonHeight,
 			Text: "Auto", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
 			Action: func() {
-				if !g.Sim.Done && g.Sim.Mode != algorithms.ModeIdle && g.Sim.Mode != algorithms.ModeAVL {
+				if g.Sim.Done {
+					g.showMessage("Algorithm has completed. Reset to start over.")
+				} else if g.Sim.Mode == algorithms.ModeIdle {
+					g.showMessage("Please select an algorithm first.")
+				} else if g.Sim.Mode == algorithms.ModeAVL {
+					g.showMessage("Auto stepping not applicable in AVL Tree mode.")
+				} else {
 					g.AutoStep = !g.AutoStep
+					if g.AutoStep {
+						g.showMessage("Auto stepping enabled. Use speed slider to adjust.")
+					} else {
+						g.showMessage("Auto stepping disabled.")
+					}
 				}
 			},
 		},
@@ -321,6 +357,123 @@ func (g *Game) createButtons() {
 			Action: func() {
 				g.Sim.Reset()
 				g.AutoStep = false
+				g.showMessage("Algorithm reset. Ready for new simulation.")
+			},
+		},
+	}
+
+	// Create advanced algorithm row buttons
+	algorithmRowButtons := []*Button{
+		{
+			X: margin, Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Dijkstra", BgColor: purpleBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Dijkstra's algorithm")
+				} else if g.StartNode < 0 || g.StartNode >= len(g.Sim.Graph.Nodes) {
+					g.showMessage("Please select a valid start node first")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Dijkstra's algorithm")
+				} else {
+					g.Sim.StartDijkstra(g.StartNode)
+					g.showMessage("Dijkstra's algorithm executed from node " + string(rune('A'+g.StartNode)))
+				}
+			},
+		},
+		{
+			X: margin + (buttonWidth + buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "A*", BgColor: purpleBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run A* algorithm")
+				} else if g.StartNode < 0 || g.StartNode >= len(g.Sim.Graph.Nodes) {
+					g.showMessage("Please select a valid start node first")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for A* algorithm")
+				} else {
+					// Find a target node (preferably furthest from start)
+					target := (g.StartNode + len(g.Sim.Graph.Nodes)/2) % len(g.Sim.Graph.Nodes)
+					if target == g.StartNode && len(g.Sim.Graph.Nodes) > 1 {
+						target = (target + 1) % len(g.Sim.Graph.Nodes)
+					}
+					g.Sim.StartAStar(g.StartNode, target)
+					g.showMessage(fmt.Sprintf("A* algorithm executed from %c to %c",
+						rune('A'+g.StartNode), rune('A'+target)))
+				}
+			},
+		},
+		{
+			X: margin + 2*(buttonWidth+buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Topo Sort", BgColor: blueBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Topological Sort")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Topological Sort")
+				} else {
+					g.Sim.StartTopological()
+					g.showMessage("Topological sort executed")
+				}
+			},
+		},
+		{
+			X: margin + 3*(buttonWidth+buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Kruskal", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Kruskal's algorithm")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Kruskal's MST")
+				} else if len(g.Sim.Graph.WeightedEdges) == 0 {
+					g.showMessage("Graph needs edges for Kruskal's MST")
+				} else {
+					g.Sim.StartKruskal()
+					g.showMessage("Kruskal's MST algorithm executed")
+				}
+			},
+		},
+		{
+			X: margin + 4*(buttonWidth+buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Prim", BgColor: greenBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Prim's algorithm")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Prim's MST")
+				} else if len(g.Sim.Graph.WeightedEdges) == 0 {
+					g.showMessage("Graph needs edges for Prim's MST")
+				} else {
+					g.Sim.StartPrim()
+					g.showMessage("Prim's MST algorithm executed")
+				}
+			},
+		},
+		{
+			X: margin + 5*(buttonWidth+buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Tarjan", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Tarjan's algorithm")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Tarjan's SCC")
+				} else {
+					g.Sim.StartTarjan()
+					g.showMessage("Tarjan's SCC algorithm executed")
+				}
+			},
+		},
+		{
+			X: margin + 6*(buttonWidth+buttonSpacing), Y: algorithmRowY, Width: buttonWidth, Height: buttonHeight,
+			Text: "Kosaraju", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				if g.Sim.Mode != algorithms.ModeIdle {
+					g.showMessage("Reset first to run Kosaraju's algorithm")
+				} else if len(g.Sim.Graph.Nodes) < 2 {
+					g.showMessage("Need at least 2 nodes for Kosaraju's SCC")
+				} else {
+					g.Sim.StartKosaraju()
+					g.showMessage("Kosaraju's SCC algorithm executed")
+				}
 			},
 		},
 	}
@@ -504,6 +657,7 @@ func (g *Game) createButtons() {
 	}
 
 	// Add buttons to the game
+	buttons = append(buttons, algorithmRowButtons...)
 	buttons = append(buttons, middleRowButtons...)
 	buttons = append(buttons, topRowButtons...)
 	buttons = append(buttons, avlRowButtons...)

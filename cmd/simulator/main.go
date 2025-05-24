@@ -17,7 +17,7 @@ func main() {
 	game := ui.NewGame(sim)
 
 	// Configure and run the game with larger window size
-	ebiten.SetWindowSize(800, 650)
+	ebiten.SetWindowSize(800, 700)
 	ebiten.SetWindowTitle("BFS and DFS Graph Simulator")
 
 	if err := ebiten.RunGame(game); err != nil {

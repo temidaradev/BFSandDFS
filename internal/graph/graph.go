@@ -8,18 +8,22 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"bfsdfs/internal/algorithms"
 )
 
 // Node represents a vertex in a graph with positioning information
 type Node struct {
 	X, Y      int
 	Neighbors []int
+	Weights   []float64 // Weights corresponding to neighbors
 }
 
 // Graph represents a collection of nodes and edges
 type Graph struct {
-	Nodes []Node
-	Edges [][2]int
+	Nodes         []Node
+	Edges         [][2]int
+	WeightedEdges []algorithms.Edge // For weighted algorithms
 }
 
 // NewRandomGraph creates a new graph with n nodes and random edges
@@ -32,6 +36,7 @@ func NewRandomGraph(n int) Graph {
 			X:         60 + (i%5)*80,
 			Y:         60 + (i/5)*80,
 			Neighbors: []int{},
+			Weights:   []float64{},
 		}
 		g.Nodes = append(g.Nodes, node)
 	}
@@ -47,12 +52,18 @@ func NewRandomGraph(n int) Graph {
 
 		// Avoid self-loops and duplicate edges
 		if a != b && !edgeSet[[2]int{a, b}] && !edgeSet[[2]int{b, a}] {
+			// Generate random weight between 1 and 10
+			weight := 1.0 + r.Float64()*9.0
+
 			// Add edges in both directions (undirected graph)
 			g.Nodes[a].Neighbors = append(g.Nodes[a].Neighbors, b)
+			g.Nodes[a].Weights = append(g.Nodes[a].Weights, weight)
 			g.Nodes[b].Neighbors = append(g.Nodes[b].Neighbors, a)
+			g.Nodes[b].Weights = append(g.Nodes[b].Weights, weight)
 
 			// Store the edge for drawing
 			g.Edges = append(g.Edges, [2]int{a, b})
+			g.WeightedEdges = append(g.WeightedEdges, algorithms.Edge{From: a, To: b, Weight: weight})
 			edgeSet[[2]int{a, b}] = true
 		}
 	}
@@ -131,4 +142,42 @@ func GetSavedGraphs(directory string) ([]string, error) {
 	}
 
 	return graphFiles, nil
+}
+
+// GetWeightedNeighbors returns a map of weighted neighbors for algorithms
+func (g *Graph) GetWeightedNeighbors() map[int][]algorithms.Edge {
+	neighbors := make(map[int][]algorithms.Edge)
+	for i, node := range g.Nodes {
+		neighbors[i] = []algorithms.Edge{}
+		for j, neighbor := range node.Neighbors {
+			weight := 1.0 // Default weight
+			if j < len(node.Weights) {
+				weight = node.Weights[j]
+			}
+			neighbors[i] = append(neighbors[i], algorithms.Edge{
+				From:   i,
+				To:     neighbor,
+				Weight: weight,
+			})
+		}
+	}
+	return neighbors
+}
+
+// GetPositions returns a map of node positions for A* algorithm
+func (g *Graph) GetPositions() map[int]algorithms.Position {
+	positions := make(map[int]algorithms.Position)
+	for i, node := range g.Nodes {
+		positions[i] = algorithms.Position{X: node.X, Y: node.Y}
+	}
+	return positions
+}
+
+// GetUnweightedNeighbors returns a map of unweighted neighbors for algorithms
+func (g *Graph) GetUnweightedNeighbors() map[int][]int {
+	neighbors := make(map[int][]int)
+	for i, node := range g.Nodes {
+		neighbors[i] = node.Neighbors
+	}
+	return neighbors
 }

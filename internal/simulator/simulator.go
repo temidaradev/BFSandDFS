@@ -20,6 +20,14 @@ type Simulator struct {
 	avlTree    *algorithms.AVLTree
 	avlValue   int
 	avlAction  string // "insert", "delete", "search"
+
+	// Algorithm-specific results
+	ShortestPaths map[int]float64
+	Predecessors  map[int]int
+	Path          []int
+	MST           []algorithms.Edge
+	SCCs          [][]int
+	TopOrder      []int
 }
 
 // NewSimulator creates a new simulator with n nodes
@@ -70,6 +78,133 @@ func (s *Simulator) StartAVL() {
 	s.avlTree = algorithms.NewAVLTree()
 	s.avlValue = 0
 	s.avlAction = "insert"
+}
+
+// StartDijkstra initializes Dijkstra's algorithm from a source node
+func (s *Simulator) StartDijkstra(source int) {
+	s.Mode = algorithms.ModeDijkstra
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = source
+	s.LastActive = -1
+	s.Done = false
+
+	// Run Dijkstra's algorithm
+	neighbors := s.Graph.GetWeightedNeighbors()
+	distances, predecessors := algorithms.Dijkstra(neighbors, source, len(s.Graph.Nodes))
+	s.ShortestPaths = distances
+	s.Predecessors = predecessors
+	s.Done = true
+}
+
+// StartAStar initializes A* algorithm from source to goal
+func (s *Simulator) StartAStar(source, goal int) {
+	s.Mode = algorithms.ModeAStar
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = source
+	s.LastActive = -1
+	s.Done = false
+
+	// Run A* algorithm
+	neighbors := s.Graph.GetWeightedNeighbors()
+	positions := s.Graph.GetPositions()
+	path, _ := algorithms.AStar(neighbors, source, goal, positions)
+	s.Path = path
+	s.Done = true
+}
+
+// StartTopological initializes topological sort
+func (s *Simulator) StartTopological() {
+	s.Mode = algorithms.ModeTopological
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+
+	// Run topological sort
+	neighbors := s.Graph.GetUnweightedNeighbors()
+	topOrder := algorithms.TopologicalSort(neighbors, len(s.Graph.Nodes))
+	s.TopOrder = topOrder
+	s.Done = true
+}
+
+// StartKruskal initializes Kruskal's MST algorithm
+func (s *Simulator) StartKruskal() {
+	s.Mode = algorithms.ModeKruskal
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+
+	// Run Kruskal's algorithm
+	mst := algorithms.Kruskal(s.Graph.WeightedEdges, len(s.Graph.Nodes))
+	s.MST = mst
+	s.Done = true
+}
+
+// StartPrim initializes Prim's MST algorithm
+func (s *Simulator) StartPrim() {
+	s.Mode = algorithms.ModePrim
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+
+	// Run Prim's algorithm
+	neighbors := s.Graph.GetWeightedNeighbors()
+	mst := algorithms.Prim(neighbors, len(s.Graph.Nodes))
+	s.MST = mst
+	s.Done = true
+}
+
+// StartTarjan initializes Tarjan's SCC algorithm
+func (s *Simulator) StartTarjan() {
+	s.Mode = algorithms.ModeTarjan
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+
+	// Run Tarjan's algorithm
+	neighbors := s.Graph.GetUnweightedNeighbors()
+	sccs := algorithms.Tarjan(neighbors, len(s.Graph.Nodes))
+	s.SCCs = sccs
+	s.Done = true
+}
+
+// StartKosaraju initializes Kosaraju's SCC algorithm
+func (s *Simulator) StartKosaraju() {
+	s.Mode = algorithms.ModeKosaraju
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+
+	// Run Kosaraju's algorithm
+	neighbors := s.Graph.GetUnweightedNeighbors()
+	sccs := algorithms.Kosaraju(neighbors, len(s.Graph.Nodes))
+	s.SCCs = sccs
+	s.Done = true
 }
 
 // Update performs one step of the selected algorithm
@@ -123,6 +258,14 @@ func (s *Simulator) Reset() {
 	s.Current = -1
 	s.LastActive = -1
 	s.Done = false
+
+	// Clear algorithm results
+	s.ShortestPaths = nil
+	s.Predecessors = nil
+	s.Path = nil
+	s.MST = nil
+	s.SCCs = nil
+	s.TopOrder = nil
 }
 
 // UpdateAVL updates the AVL tree visualization
@@ -201,4 +344,46 @@ func (s *Simulator) DecrementAVLValue() {
 // SetAVLValue sets the value for AVL operations
 func (s *Simulator) SetAVLValue(value int) {
 	s.avlValue = value
+}
+
+// GetShortestPaths returns the shortest paths from Dijkstra
+func (s *Simulator) GetShortestPaths() map[int]float64 {
+	return s.ShortestPaths
+}
+
+// GetPath returns the path found by A*
+func (s *Simulator) GetPath() []int {
+	return s.Path
+}
+
+// GetMST returns the minimum spanning tree edges
+func (s *Simulator) GetMST() []algorithms.Edge {
+	return s.MST
+}
+
+// GetSCCs returns the strongly connected components
+func (s *Simulator) GetSCCs() [][]int {
+	return s.SCCs
+}
+
+// GetTopologicalOrder returns the topological ordering
+func (s *Simulator) GetTopologicalOrder() []int {
+	return s.TopOrder
+}
+
+// resetState resets common simulation state
+func (s *Simulator) resetState() {
+	s.Queue = nil
+	s.Stack = nil
+	s.Order = nil
+	s.Visited = map[int]bool{}
+	s.Current = -1
+	s.LastActive = -1
+	s.Done = false
+	s.ShortestPaths = nil
+	s.Predecessors = nil
+	s.Path = nil
+	s.MST = nil
+	s.SCCs = nil
+	s.TopOrder = nil
 }

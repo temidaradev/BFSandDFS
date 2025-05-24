@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
+	"math"
 	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -169,22 +171,67 @@ func (u *UI) createButtons() {
 		BgColor: red, TextColor: white,
 	})
 
-	// Row 4: AVL Operation buttons
+	// Row 4: Advanced Graph Algorithms
 	startY4 := startY3 + buttonHeight + buttonSpacing
 	u.buttons = append(u.buttons, &Button{
 		X: startX, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Dijkstra",
+		BgColor: purple, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + buttonWidth + buttonSpacing, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "A*",
+		BgColor: purple, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + (buttonWidth+buttonSpacing)*2, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Topo Sort",
+		BgColor: blue, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + (buttonWidth+buttonSpacing)*3, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Kruskal",
+		BgColor: green, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + (buttonWidth+buttonSpacing)*4, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Prim",
+		BgColor: green, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + (buttonWidth+buttonSpacing)*5, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Tarjan",
+		BgColor: orange, TextColor: white,
+	})
+	u.buttons = append(u.buttons, &Button{
+		X: startX + (buttonWidth+buttonSpacing)*6, Y: startY4,
+		Width: buttonWidth, Height: buttonHeight,
+		Text:    "Kosaraju",
+		BgColor: orange, TextColor: white,
+	})
+
+	// Row 5: AVL Operation buttons
+	startY5 := startY4 + buttonHeight + buttonSpacing
+	u.buttons = append(u.buttons, &Button{
+		X: startX, Y: startY5,
 		Width: buttonWidth, Height: buttonHeight,
 		Text:    "Insert",
 		BgColor: green, TextColor: white,
 	})
 	u.buttons = append(u.buttons, &Button{
-		X: startX + buttonWidth + buttonSpacing, Y: startY4,
+		X: startX + buttonWidth + buttonSpacing, Y: startY5,
 		Width: buttonWidth, Height: buttonHeight,
 		Text:    "Delete",
 		BgColor: red, TextColor: white,
 	})
 	u.buttons = append(u.buttons, &Button{
-		X: startX + (buttonWidth+buttonSpacing)*2, Y: startY4,
+		X: startX + (buttonWidth+buttonSpacing)*2, Y: startY5,
 		Width: buttonWidth, Height: buttonHeight,
 		Text:    "Search",
 		BgColor: orange, TextColor: white,
@@ -197,9 +244,24 @@ func (u *UI) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{240, 240, 240, 255})
 
 	// Draw title
-	title := "Graph Traversal Simulator"
-	if u.simulator.GetMode() == algorithms.ModeAVL {
+	title := "Graph Algorithm Simulator"
+	switch u.simulator.GetMode() {
+	case algorithms.ModeAVL:
 		title = "AVL Tree Simulator"
+	case algorithms.ModeDijkstra:
+		title = "Dijkstra's Shortest Path"
+	case algorithms.ModeAStar:
+		title = "A* Search Algorithm"
+	case algorithms.ModeTopological:
+		title = "Topological Sort"
+	case algorithms.ModeKruskal:
+		title = "Kruskal's MST"
+	case algorithms.ModePrim:
+		title = "Prim's MST"
+	case algorithms.ModeTarjan:
+		title = "Tarjan's SCC"
+	case algorithms.ModeKosaraju:
+		title = "Kosaraju's SCC"
 	}
 	text.Draw(screen, title, u.font, 20, 30, color.Black)
 
@@ -217,6 +279,20 @@ func (u *UI) Draw(screen *ebiten.Image) {
 		modeText += "DFS"
 	case algorithms.ModeAVL:
 		modeText += "AVL Tree"
+	case algorithms.ModeDijkstra:
+		modeText += "Dijkstra"
+	case algorithms.ModeAStar:
+		modeText += "A*"
+	case algorithms.ModeTopological:
+		modeText += "Topological Sort"
+	case algorithms.ModeKruskal:
+		modeText += "Kruskal MST"
+	case algorithms.ModePrim:
+		modeText += "Prim MST"
+	case algorithms.ModeTarjan:
+		modeText += "Tarjan SCC"
+	case algorithms.ModeKosaraju:
+		modeText += "Kosaraju SCC"
 	case algorithms.ModeIdle:
 		modeText += "Idle"
 	}
@@ -227,6 +303,7 @@ func (u *UI) Draw(screen *ebiten.Image) {
 		u.drawAVLTree(screen)
 	} else {
 		u.drawGraph(screen)
+		u.drawAlgorithmResults(screen)
 	}
 }
 
@@ -234,13 +311,29 @@ func (u *UI) Draw(screen *ebiten.Image) {
 func (u *UI) drawGraph(screen *ebiten.Image) {
 	// Draw edges
 	for _, node := range u.simulator.Graph.Nodes {
-		for _, neighbor := range node.Neighbors {
+		for j, neighbor := range node.Neighbors {
 			// Draw edge
 			ebitenutil.DrawLine(screen,
 				float64(node.X), float64(node.Y),
 				float64(u.simulator.Graph.Nodes[neighbor].X),
 				float64(u.simulator.Graph.Nodes[neighbor].Y),
 				color.Black)
+
+			// Draw edge weight if it exists and we're in a weighted algorithm mode
+			mode := u.simulator.GetMode()
+			if (mode == algorithms.ModeDijkstra || mode == algorithms.ModeAStar ||
+				mode == algorithms.ModeKruskal || mode == algorithms.ModePrim) &&
+				j < len(node.Weights) {
+
+				// Calculate midpoint
+				midX := (node.X + u.simulator.Graph.Nodes[neighbor].X) / 2
+				midY := (node.Y + u.simulator.Graph.Nodes[neighbor].Y) / 2
+
+				// Draw weight
+				weightText := fmt.Sprintf("%.1f", node.Weights[j])
+				text.Draw(screen, weightText, u.smallFont,
+					midX, midY, color.RGBA{128, 128, 128, 255})
+			}
 		}
 	}
 
@@ -333,6 +426,137 @@ func (u *UI) drawAVLEdge(screen *ebiten.Image, from, to *algorithms.AVLNode) {
 	ebitenutil.DrawLine(screen, x1, y1, x2, y2, color.Black)
 }
 
+// drawAlgorithmResults draws algorithm-specific visualization overlays
+func (u *UI) drawAlgorithmResults(screen *ebiten.Image) {
+	mode := u.simulator.GetMode()
+
+	switch mode {
+	case algorithms.ModeDijkstra:
+		u.drawDijkstraResults(screen)
+	case algorithms.ModeAStar:
+		u.drawAStarPath(screen)
+	case algorithms.ModeTopological:
+		u.drawTopologicalOrder(screen)
+	case algorithms.ModeKruskal, algorithms.ModePrim:
+		u.drawMST(screen)
+	case algorithms.ModeTarjan, algorithms.ModeKosaraju:
+		u.drawSCCs(screen)
+	}
+}
+
+// drawDijkstraResults draws shortest path distances
+func (u *UI) drawDijkstraResults(screen *ebiten.Image) {
+	distances := u.simulator.GetShortestPaths()
+	if distances == nil {
+		return
+	}
+
+	// Draw distance labels next to nodes
+	for i, node := range u.simulator.Graph.Nodes {
+		if dist, exists := distances[i]; exists && dist != math.Inf(1) {
+			distText := fmt.Sprintf("%.1f", dist)
+			text.Draw(screen, distText, u.smallFont,
+				node.X+25, node.Y-10, color.RGBA{255, 0, 0, 255})
+		}
+	}
+}
+
+// drawAStarPath draws the found path
+func (u *UI) drawAStarPath(screen *ebiten.Image) {
+	path := u.simulator.GetPath()
+	if path == nil || len(path) < 2 {
+		return
+	}
+
+	// Draw path edges in red
+	for i := 0; i < len(path)-1; i++ {
+		from := u.simulator.Graph.Nodes[path[i]]
+		to := u.simulator.Graph.Nodes[path[i+1]]
+		ebitenutil.DrawLine(screen,
+			float64(from.X), float64(from.Y),
+			float64(to.X), float64(to.Y),
+			color.RGBA{255, 0, 0, 255})
+	}
+}
+
+// drawTopologicalOrder draws the topological ordering
+func (u *UI) drawTopologicalOrder(screen *ebiten.Image) {
+	topOrder := u.simulator.GetTopologicalOrder()
+	if topOrder == nil {
+		return
+	}
+
+	// Draw order numbers next to nodes
+	for order, nodeId := range topOrder {
+		if nodeId < len(u.simulator.Graph.Nodes) {
+			node := u.simulator.Graph.Nodes[nodeId]
+			orderText := fmt.Sprintf("%d", order+1)
+			text.Draw(screen, orderText, u.smallFont,
+				node.X+25, node.Y+10, color.RGBA{0, 0, 255, 255})
+		}
+	}
+}
+
+// drawMST draws the minimum spanning tree edges
+func (u *UI) drawMST(screen *ebiten.Image) {
+	mst := u.simulator.GetMST()
+	if mst == nil {
+		return
+	}
+
+	// Draw MST edges in green
+	for _, edge := range mst {
+		if edge.From < len(u.simulator.Graph.Nodes) && edge.To < len(u.simulator.Graph.Nodes) {
+			from := u.simulator.Graph.Nodes[edge.From]
+			to := u.simulator.Graph.Nodes[edge.To]
+			ebitenutil.DrawLine(screen,
+				float64(from.X), float64(from.Y),
+				float64(to.X), float64(to.Y),
+				color.RGBA{0, 255, 0, 255})
+
+			// Draw weight label
+			midX := (from.X + to.X) / 2
+			midY := (from.Y + to.Y) / 2
+			weightText := fmt.Sprintf("%.1f", edge.Weight)
+			text.Draw(screen, weightText, u.smallFont,
+				midX, midY, color.RGBA{0, 128, 0, 255})
+		}
+	}
+}
+
+// drawSCCs draws strongly connected components with different colors
+func (u *UI) drawSCCs(screen *ebiten.Image) {
+	sccs := u.simulator.GetSCCs()
+	if sccs == nil {
+		return
+	}
+
+	// Define colors for different SCCs
+	sccColors := []color.RGBA{
+		{255, 100, 100, 255}, // Red
+		{100, 255, 100, 255}, // Green
+		{100, 100, 255, 255}, // Blue
+		{255, 255, 100, 255}, // Yellow
+		{255, 100, 255, 255}, // Magenta
+		{100, 255, 255, 255}, // Cyan
+	}
+
+	// Draw SCC labels
+	for sccIndex, scc := range sccs {
+		colorIndex := sccIndex % len(sccColors)
+		sccColor := sccColors[colorIndex]
+
+		for _, nodeId := range scc {
+			if nodeId < len(u.simulator.Graph.Nodes) {
+				node := u.simulator.Graph.Nodes[nodeId]
+				sccText := fmt.Sprintf("SCC%d", sccIndex+1)
+				text.Draw(screen, sccText, u.smallFont,
+					node.X-15, node.Y+30, sccColor)
+			}
+		}
+	}
+}
+
 // Update updates the UI state
 func (u *UI) Update() error {
 	// Get mouse position
@@ -380,13 +604,27 @@ func (u *UI) Update() error {
 				// Implementation needed
 			case 16: // Reset
 				u.simulator.Reset()
-			case 17: // Insert (AVL)
+			case 17: // Dijkstra
+				u.simulator.StartDijkstra(0)
+			case 18: // A*
+				u.simulator.StartAStar(0, len(u.simulator.Graph.Nodes)-1) // From first to last node
+			case 19: // Topological Sort
+				u.simulator.StartTopological()
+			case 20: // Kruskal
+				u.simulator.StartKruskal()
+			case 21: // Prim
+				u.simulator.StartPrim()
+			case 22: // Tarjan
+				u.simulator.StartTarjan()
+			case 23: // Kosaraju
+				u.simulator.StartKosaraju()
+			case 24: // Insert (AVL)
 				if u.simulator.GetMode() == algorithms.ModeAVL {
 					u.simulator.SetAVLAction("insert")
 					u.simulator.InsertAVL(u.simulator.GetAVLValue())
 					u.simulator.IncrementAVLValue()
 				}
-			case 18: // Delete (AVL)
+			case 25: // Delete (AVL)
 				if u.simulator.GetMode() == algorithms.ModeAVL {
 					u.simulator.SetAVLAction("delete")
 					if u.simulator.GetAVLValue() > 0 {
@@ -394,7 +632,7 @@ func (u *UI) Update() error {
 						u.simulator.DeleteAVL(u.simulator.GetAVLValue())
 					}
 				}
-			case 19: // Search (AVL)
+			case 26: // Search (AVL)
 				if u.simulator.GetMode() == algorithms.ModeAVL {
 					u.simulator.SetAVLAction("search")
 					u.simulator.SearchAVL(u.simulator.GetAVLValue())
