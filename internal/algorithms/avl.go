@@ -1,5 +1,7 @@
 package algorithms
 
+import "fmt"
+
 // AVLNode represents a node in an AVL tree
 type AVLNode struct {
 	Value    int
@@ -276,4 +278,25 @@ func (t *AVLTree) updateNodePositions(node *AVLNode, x, y, levelHeight, level in
 	if node.Right != nil {
 		t.updateNodePositions(node.Right, x+spacing, y+levelHeight, levelHeight, level+1)
 	}
+}
+
+// GetStateHash generates a hash representing the current tree state
+func (t *AVLTree) GetStateHash() string {
+	if t.Root == nil {
+		return "empty"
+	}
+	return t.getNodeHash(t.Root, "")
+}
+
+// getNodeHash recursively generates hash for tree structure
+func (t *AVLTree) getNodeHash(node *AVLNode, hash string) string {
+	if node == nil {
+		return hash + "nil"
+	}
+
+	hash += fmt.Sprintf("v%d-h%d-", node.Value, node.Height)
+	hash = t.getNodeHash(node.Left, hash)
+	hash = t.getNodeHash(node.Right, hash)
+
+	return hash
 }

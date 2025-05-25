@@ -13,8 +13,8 @@ func main() {
 	// Create a new simulator with 10 nodes
 	sim := simulator.NewSimulator(10)
 
-	// Create a new game with the simulator
-	game := ui.NewGame(sim)
+	// Create a new game with the simulator and default performance tier (1 = Medium)
+	game := ui.NewGame(sim, 1)
 
 	// Configure and run the game with larger window size
 	ebiten.SetWindowSize(800, 700)

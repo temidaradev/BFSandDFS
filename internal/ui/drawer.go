@@ -399,6 +399,46 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		cancelButtonX := modalX + modalWidth - buttonWidth - buttonSpacing
 		drawButton(screen, cancelButtonX, buttonY, buttonWidth, buttonHeight, "Cancel", color.RGBA{150, 100, 100, 255}, color.RGBA{255, 255, 255, 255}, basicfont.Face7x13)
 	}
+
+	// Draw performance tier selection modal
+	if g.ShowPerformanceModal {
+		modalWidth := 340
+		modalHeight := 220
+		screenWidth, screenHeight := ebiten.WindowSize()
+		modalX := (screenWidth - modalWidth) / 2
+		modalY := (screenHeight - modalHeight) / 2
+
+		// Modal background
+		modalBg := ebiten.NewImage(modalWidth, modalHeight)
+		modalBg.Fill(color.RGBA{230, 230, 230, 255})
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(modalX), float64(modalY))
+		screen.DrawImage(modalBg, opts)
+
+		// Modal title
+		title := "Select Performance Tier"
+		esset.DrawText(screen, title, float64(modalX+20), float64(modalY+20), assets.FontFaceS, color.Black)
+
+		// Option buttons
+		buttonW := 90
+		buttonH := 40
+		buttonY := modalY + 70
+		spacing := 20
+		labels := []string{"Low", "Medium", "High"}
+		for i, label := range labels {
+			bx := modalX + 20 + i*(buttonW+spacing)
+			bg := color.RGBA{180, 180, 180, 255}
+			if g.PerformanceTier == i {
+				bg = color.RGBA{220, 160, 60, 255}
+			}
+			drawButton(screen, bx, buttonY, buttonW, buttonH, label, bg, color.RGBA{255, 255, 255, 255}, basicfont.Face7x13)
+		}
+
+		// Cancel button
+		cancelX := modalX + modalWidth - buttonW - 20
+		cancelY := modalY + modalHeight - buttonH - 20
+		drawButton(screen, cancelX, cancelY, buttonW, buttonH, "Cancel", color.RGBA{150, 100, 100, 255}, color.RGBA{255, 255, 255, 255}, basicfont.Face7x13)
+	}
 }
 
 // drawButton is a helper function to draw a button

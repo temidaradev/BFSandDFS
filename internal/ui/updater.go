@@ -401,6 +401,40 @@ func (g *Game) Update() error {
 		return nil // Consume input while modal is open
 	}
 
+	// Handle performance modal input
+	if g.ShowPerformanceModal {
+		screenWidth, screenHeight := ebiten.WindowSize()
+		modalWidth := 340
+		modalHeight := 220
+		modalX := (screenWidth - modalWidth) / 2
+		modalY := (screenHeight - modalHeight) / 2
+		buttonW := 90
+		buttonH := 40
+		buttonY := modalY + 70
+		spacing := 20
+		labels := []string{"Low", "Medium", "High"}
+
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			for i := range labels {
+				bx := modalX + 20 + i*(buttonW+spacing)
+				if g.MouseX >= bx && g.MouseX <= bx+buttonW && g.MouseY >= buttonY && g.MouseY <= buttonY+buttonH {
+					g.PerformanceTier = i
+					g.ShowPerformanceModal = false
+					g.showMessage("Performance set to " + g.PerformanceTierName())
+					return nil
+				}
+			}
+			// Cancel button
+			cancelX := modalX + modalWidth - buttonW - 20
+			cancelY := modalY + modalHeight - buttonH - 20
+			if g.MouseX >= cancelX && g.MouseX <= cancelX+buttonW && g.MouseY >= cancelY && g.MouseY <= cancelY+buttonH {
+				g.ShowPerformanceModal = false
+				return nil
+			}
+		}
+		return nil // Block all other input while modal is open
+	}
+
 	// Handle left mouse press
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 		// Handle button clicks when mouse is first pressed

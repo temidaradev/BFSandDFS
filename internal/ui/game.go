@@ -202,10 +202,16 @@ type Game struct {
 	frameCount    int
 	fps           int
 	lastFPSUpdate time.Time
+
+	// Performance tier for user setting (Low, Medium, High)
+	PerformanceTier int // 0=Low, 1=Medium, 2=High
+
+	// Show performance tier selection modal
+	ShowPerformanceModal bool
 }
 
 // NewGame creates a new game with the given simulator
-func NewGame(sim *simulator.Simulator) *Game {
+func NewGame(sim *simulator.Simulator, performanceTier int) *Game {
 	// Get initial window size for canvas initialization
 	screenWidth, screenHeight := ebiten.WindowSize()
 
@@ -244,6 +250,7 @@ func NewGame(sim *simulator.Simulator) *Game {
 		sliderHandleCache: ebiten.NewImage(10, 20),
 		speedBgCache:      ebiten.NewImage(50, 20),
 		messageBgCache:    ebiten.NewImage(200, 20),
+		PerformanceTier:   performanceTier,
 	}
 
 	// Create UI buttons
@@ -523,6 +530,14 @@ func (g *Game) createButtons() {
 				if g.EditMode {
 					g.showMessage("Edit mode: Drag nodes to reposition them")
 				}
+			},
+		},
+		{
+			X: margin + (buttonWidth + 20 + buttonSpacing) + 3*(buttonWidth+buttonSpacing), Y: topRowY,
+			Width: buttonWidth + 20, Height: buttonHeight,
+			Text: "Performance", BgColor: orangeBg, TextColor: whiteTxt, AnchorBottom: true,
+			Action: func() {
+				g.ShowPerformanceModal = true
 			},
 		},
 	}
@@ -829,5 +844,19 @@ func handleKeyboardInput(g *Game) {
 		g.Sim.Update()
 		// Wait to avoid too-rapid stepping
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// Add a helper to get the tier name
+func (g *Game) PerformanceTierName() string {
+	switch g.PerformanceTier {
+	case 0:
+		return "Low"
+	case 1:
+		return "Medium"
+	case 2:
+		return "High"
+	default:
+		return "Unknown"
 	}
 }
