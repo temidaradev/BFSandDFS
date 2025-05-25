@@ -100,7 +100,6 @@ func (b *Button) Draw(screen *ebiten.Image, g *Game) {
 // Game represents the Ebiten game that visualizes the simulation
 type Game struct {
 	Sim               *simulator.Simulator
-	StartNode         int
 	MouseX            int
 	MouseY            int
 	lastMouseX        int // Track last mouse X position for optimization
@@ -114,9 +113,21 @@ type Game struct {
 	SliderDragging    bool // Whether the speed slider is being dragged
 	Buttons           []*Button
 
+	// Button panel state
+	ButtonsCollapsed       bool    // Whether button panel is collapsed
+	CollapseButton         *Button // Button to toggle collapse state
+	ButtonWindowX          int     // X position of button window
+	ButtonWindowY          int     // Y position of button window
+	ButtonWindowWidth      int     // Width of button window
+	ButtonWindowHeight     int     // Height of button window
+	DraggingButtonWindow   bool    // Whether the button window is being dragged
+	ButtonWindowDragStartX int     // X position where button window drag started
+	ButtonWindowDragStartY int     // Y position where button window drag started
+
 	// Node editing features
-	EditMode      bool
-	DraggingNode  int // Index of node being dragged, -1 if none
+	StartNode     int
+	EditMode      bool // Whether edit mode is enabled
+	DraggingNode  int  // Index of node being dragged, -1 if none
 	AddingEdge    bool
 	EdgeStartNode int
 	RemovingNode  bool
@@ -193,21 +204,28 @@ func NewGame(sim *simulator.Simulator) *Game {
 	screenWidth, screenHeight := ebiten.WindowSize()
 
 	g := &Game{
-		Sim:            sim,
-		StartNode:      0,
-		StepDelay:      30, // Default to 30 frames between steps (about 0.5 seconds at 60 FPS)
-		DraggingNode:   -1, // No node being dragged initially
-		EdgeStartNode:  -1, // No edge start node selected initially
-		ShowGrid:       true,
-		SnapToGrid:     true,
-		GridConfig:     draw.DefaultGridConfig(),
-		ContextMenu:    NewContextMenu(),
-		SaveDialog:     NewFileDialog(true),
-		LoadDialog:     NewFileDialog(false),
-		CanvasOffsetX:  0, // Initial canvas offset
-		CanvasOffsetY:  0, // Initial canvas offset
-		CanvasDragging: false,
-		ShowHelp:       false, // Initialize help overlay as hidden
+		Sim:              sim,
+		StartNode:        0,
+		StepDelay:        30, // Default to 30 frames between steps (about 0.5 seconds at 60 FPS)
+		DraggingNode:     -1, // No node being dragged initially
+		EdgeStartNode:    -1, // No edge start node selected initially
+		ShowGrid:         true,
+		SnapToGrid:       true,
+		GridConfig:       draw.DefaultGridConfig(),
+		ContextMenu:      NewContextMenu(),
+		SaveDialog:       NewFileDialog(true),
+		LoadDialog:       NewFileDialog(false),
+		CanvasOffsetX:    0, // Initial canvas offset
+		CanvasOffsetY:    0, // Initial canvas offset
+		CanvasDragging:   false,
+		ShowHelp:         false, // Initialize help overlay as hidden
+		ButtonsCollapsed: false, // Button panel starts expanded
+
+		// Initialize button window properties
+		ButtonWindowX:      20,
+		ButtonWindowY:      screenHeight - 220,
+		ButtonWindowWidth:  700,
+		ButtonWindowHeight: 200,
 
 		// Initialize cached canvases
 		graphCanvas:       ebiten.NewImage(screenWidth, screenHeight),
@@ -546,6 +564,23 @@ func (g *Game) createButtons() {
 	buttons = append(buttons, topRowButtons...)
 	buttons = append(buttons, avlRowButtons...)
 	g.Buttons = buttons
+
+	// Create the collapse button separately (it shouldn't be part of the button array that gets hidden)
+	g.CollapseButton = &Button{
+		X: margin + 7*(buttonWidth+buttonSpacing), Y: middleRowY, Width: 30, Height: buttonHeight,
+		Text: "<<", BgColor: color.RGBA{80, 80, 80, 255}, TextColor: whiteTxt, AnchorBottom: true,
+		Action: func() {
+			g.ButtonsCollapsed = !g.ButtonsCollapsed
+			// Update button text based on state
+			if g.ButtonsCollapsed {
+				g.CollapseButton.Text = ">>"
+				g.showMessage("Button panel collapsed")
+			} else {
+				g.CollapseButton.Text = "<<"
+				g.showMessage("Button panel expanded")
+			}
+		},
+	}
 }
 
 // showMessage displays a temporary message to the user

@@ -62,13 +62,138 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		draw.DrawLine(screen, float64(right), float64(top), float64(right), float64(bottom), borderColor)   // Right border
 	}
 
-	// Draw HUD overlay (no black bars, just elements)
-	// topHudHeight := 40 // Removed top HUD
-	// bottomHudHeight := 60 // Removed bottom HUD
+	// Draw the button window
+	titleBarHeight := 25
+	var windowWidth int
+	if g.ButtonsCollapsed {
+		windowWidth = 120
+	} else {
+		windowWidth = g.ButtonWindowWidth
+	}
 
-	// Draw buttons directly
-	for _, btn := range g.Buttons {
-		btn.Draw(screen, g)
+	var windowHeight int
+	if g.ButtonsCollapsed {
+		windowHeight = titleBarHeight
+	} else {
+		windowHeight = g.ButtonWindowHeight
+	}
+	windowBg := ebiten.NewImage(windowWidth, windowHeight)
+
+	// Window background
+	windowBg.Fill(color.RGBA{220, 220, 220, 240}) // Light gray with slight transparency
+
+	// Title bar background
+	titleBar := ebiten.NewImage(windowWidth, titleBarHeight)
+	titleBar.Fill(color.RGBA{70, 130, 180, 255}) // Steel blue title bar
+
+	// Apply window
+	windowOpts := &ebiten.DrawImageOptions{}
+	windowOpts.GeoM.Translate(float64(g.ButtonWindowX), float64(g.ButtonWindowY))
+	screen.DrawImage(windowBg, windowOpts)
+
+	// Apply title bar
+	titleBarOpts := &ebiten.DrawImageOptions{}
+	titleBarOpts.GeoM.Translate(float64(g.ButtonWindowX), float64(g.ButtonWindowY))
+	screen.DrawImage(titleBar, titleBarOpts)
+
+	// Draw window title
+	titleText := "Graph Controls"
+	text.Draw(screen, titleText, basicfont.Face7x13, g.ButtonWindowX+10, g.ButtonWindowY+16, color.White)
+
+	// Draw collapse button in title bar
+	collapseButtonWidth := 25
+	collapseButtonHeight := 20
+	collapseButtonX := g.ButtonWindowX + windowWidth - collapseButtonWidth - 5
+	collapseButtonY := g.ButtonWindowY + 3
+
+	collapseButtonBg := ebiten.NewImage(collapseButtonWidth, collapseButtonHeight)
+	collapseButtonBg.Fill(color.RGBA{90, 150, 200, 255})
+
+	collapseButtonOpts := &ebiten.DrawImageOptions{}
+	collapseButtonOpts.GeoM.Translate(float64(collapseButtonX), float64(collapseButtonY))
+	screen.DrawImage(collapseButtonBg, collapseButtonOpts)
+
+	// Draw button text (centered)
+	var collapseText string
+	if g.ButtonsCollapsed {
+		collapseText = ">>"
+	} else {
+		collapseText = "<<"
+	}
+	textX := collapseButtonX + (collapseButtonWidth-len(collapseText)*7)/2 // Approximate width
+	textY := collapseButtonY + 15
+	text.Draw(screen, collapseText, basicfont.Face7x13, textX, textY, color.White)
+
+	// Store collapse button bounds for click detection
+	g.CollapseButton.X = collapseButtonX
+	g.CollapseButton.Y = collapseButtonY
+	g.CollapseButton.Width = collapseButtonWidth
+	g.CollapseButton.Height = collapseButtonHeight
+	g.CollapseButton.Text = collapseText
+
+	// Draw buttons only if window is not collapsed
+	if !g.ButtonsCollapsed {
+		// Initialize the grid layout
+		titleBarHeight := 25
+		buttonOffsetY := titleBarHeight + 10 // Start below title bar
+		buttonOffsetX := 20                  // Left margin inside window
+
+		// Calculate available space
+		availableWidth := g.ButtonWindowWidth - (buttonOffsetX * 2) // Subtract left and right margins
+
+		// Get the widest button to calculate proper spacing
+		maxButtonWidth := 0
+		for _, btn := range g.Buttons {
+			if btn.Width > maxButtonWidth {
+				maxButtonWidth = btn.Width
+			}
+		}
+
+		// Calculate how many buttons can fit per row
+		buttonMargin := 10
+		buttonsPerRow := max(1, (availableWidth)/(maxButtonWidth+buttonMargin))
+
+		// Standard button height (used by all buttons)
+		buttonHeight := 30
+
+		// Draw buttons in a grid layout
+		for i, btn := range g.Buttons {
+			// Store original values to restore them later
+			origX := btn.X
+			origY := btn.Y
+			origAnchorBottom := btn.AnchorBottom
+
+			// Calculate position in the grid
+			rowIndex := i / buttonsPerRow
+			colIndex := i % buttonsPerRow
+
+			// Adjust X position to ensure buttons are evenly spaced
+			cellWidth := availableWidth / buttonsPerRow
+			btnXOffset := (cellWidth - btn.Width) / 2
+
+			// Set position relative to window
+			btn.X = g.ButtonWindowX + buttonOffsetX + (colIndex * cellWidth) + btnXOffset
+			btn.Y = g.ButtonWindowY + buttonOffsetY + rowIndex*(btn.Height+buttonMargin)
+			btn.AnchorBottom = false // Disable bottom anchoring
+
+			// Draw the button
+			btn.Draw(screen, nil)
+
+			// Restore original values so we don't affect the button's original position
+			btn.X = origX
+			btn.Y = origY
+			btn.AnchorBottom = origAnchorBottom
+		}
+
+		// Update window height to fit all buttons
+		buttonCount := len(g.Buttons)
+		rowCount := (buttonCount + buttonsPerRow - 1) / buttonsPerRow                  // Ceiling division
+		totalButtonHeight := rowCount*(buttonHeight+buttonMargin) + buttonOffsetY + 10 // +10 for bottom margin
+
+		// Update window height if needed (only when not collapsed)
+		if !g.ButtonsCollapsed {
+			g.ButtonWindowHeight = max(titleBarHeight+50, totalButtonHeight)
+		}
 	}
 
 	// Draw algorithm info if active (Visit order, Queue/Stack)

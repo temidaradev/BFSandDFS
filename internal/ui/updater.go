@@ -45,13 +45,11 @@ func (g *Game) Update() error {
 
 	// Only update button hover states if mouse has moved
 	if g.MouseX != g.lastMouseX || g.MouseY != g.lastMouseY {
-		// Handle button hover state
-		for _, btn := range g.Buttons {
-			// Calculate button position based on anchoring
-			btnX, btnY := g.getAdjustedButtonPosition(btn)
-			btn.Hover = g.MouseX >= btnX && g.MouseX <= btnX+btn.Width &&
-				g.MouseY >= btnY && g.MouseY <= btnY+btn.Height
-		}
+		// Update collapse button hover state
+		g.CollapseButton.Hover = g.MouseX >= g.CollapseButton.X &&
+			g.MouseX <= g.CollapseButton.X+g.CollapseButton.Width &&
+			g.MouseY >= g.CollapseButton.Y &&
+			g.MouseY <= g.CollapseButton.Y+g.CollapseButton.Height
 
 		// Update context menu hover states
 		g.ContextMenu.UpdateHoverState(g.MouseX, g.MouseY)
@@ -407,15 +405,95 @@ func (g *Game) Update() error {
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 		// Handle button clicks when mouse is first pressed
 		if !g.MouseClicked {
-			// Check for button clicks using adjusted positions
-			for _, btn := range g.Buttons {
-				btnX, btnY := g.getAdjustedButtonPosition(btn)
-				if g.MouseX >= btnX && g.MouseX <= btnX+btn.Width &&
-					g.MouseY >= btnY && g.MouseY <= btnY+btn.Height {
-					btn.Action()
-					g.MouseClicked = true
-					return nil
+			// Check if mouse is on the title bar (but not on collapse button) - prioritize window dragging
+			titleBarHeight := 25
+			var windowWidth int
+			if g.ButtonsCollapsed {
+				windowWidth = 120
+			} else {
+				windowWidth = g.ButtonWindowWidth
+			}
+
+			// Check for window dragging first to give it priority
+			if g.MouseX >= g.ButtonWindowX &&
+				g.MouseX <= g.ButtonWindowX+windowWidth-g.CollapseButton.Width-5 &&
+				g.MouseY >= g.ButtonWindowY &&
+				g.MouseY <= g.ButtonWindowY+titleBarHeight {
+				// Start dragging window
+				g.DraggingButtonWindow = true
+				g.ButtonWindowDragStartX = g.MouseX
+				g.ButtonWindowDragStartY = g.MouseY
+				g.MouseClicked = true
+				return nil
+			}
+
+			// Check for collapse button click
+			if g.CollapseButton != nil &&
+				g.MouseX >= g.CollapseButton.X &&
+				g.MouseX <= g.CollapseButton.X+g.CollapseButton.Width &&
+				g.MouseY >= g.CollapseButton.Y &&
+				g.MouseY <= g.CollapseButton.Y+g.CollapseButton.Height {
+				// Toggle collapsed state
+				g.ButtonsCollapsed = !g.ButtonsCollapsed
+				g.MouseClicked = true
+				return nil
+			}
+
+			// Check if click is inside the window area - prevent node interaction when clicking inside the window
+			if !g.ButtonsCollapsed &&
+				g.MouseX >= g.ButtonWindowX &&
+				g.MouseX <= g.ButtonWindowX+g.ButtonWindowWidth &&
+				g.MouseY >= g.ButtonWindowY &&
+				g.MouseY <= g.ButtonWindowY+g.ButtonWindowHeight {
+				// Inside the button window, so prioritize button clicks
+				if !g.ButtonsCollapsed {
+					// Use the same layout calculations as in drawer.go for consistency
+					titleBarHeight := 25
+					buttonOffsetY := titleBarHeight + 10 // Start below title bar
+					buttonOffsetX := 20                  // Left margin inside window
+
+					// Calculate available space
+					availableWidth := g.ButtonWindowWidth - (buttonOffsetX * 2) // Subtract margins
+
+					// Get the widest button to calculate proper spacing
+					maxButtonWidth := 0
+					for _, btn := range g.Buttons {
+						if btn.Width > maxButtonWidth {
+							maxButtonWidth = btn.Width
+						}
+					}
+
+					// Calculate how many buttons can fit per row
+					buttonMargin := 10
+					buttonsPerRow := max(1, (availableWidth)/(maxButtonWidth+buttonMargin))
+
+					// Check if any button was clicked
+					for i, btn := range g.Buttons {
+						// Calculate position in the grid using the same logic as drawer.go
+						rowIndex := i / buttonsPerRow
+						colIndex := i % buttonsPerRow
+
+						// Adjust X position to ensure buttons are evenly spaced
+						cellWidth := availableWidth / buttonsPerRow
+						btnXOffset := (cellWidth - btn.Width) / 2
+
+						// Calculate button bounds
+						btnX := g.ButtonWindowX + buttonOffsetX + (colIndex * cellWidth) + btnXOffset
+						btnY := g.ButtonWindowY + buttonOffsetY + rowIndex*(btn.Height+buttonMargin)
+
+						// Check if mouse is inside these bounds
+						if g.MouseX >= btnX && g.MouseX <= btnX+btn.Width &&
+							g.MouseY >= btnY && g.MouseY <= btnY+btn.Height {
+							btn.Action()
+							g.MouseClicked = true
+							return nil
+						}
+					}
 				}
+
+				// Even if no button was clicked, prevent further processing if inside window
+				g.MouseClicked = true
+				return nil
 			}
 
 			// Check for slider interaction in the HUD area
@@ -705,6 +783,60 @@ func (g *Game) Update() error {
 	// Handle help toggle
 	if inpututil.IsKeyJustPressed(ebiten.KeyH) {
 		g.ShowHelp = !g.ShowHelp
+	}
+
+	// Handle window dragging by title bar
+	titleBarHeight := 25
+	var windowWidth int
+	if g.ButtonsCollapsed {
+		windowWidth = 120
+	} else {
+		windowWidth = g.ButtonWindowWidth
+	}
+
+	// Check if mouse is on the title bar (but not on collapse button)
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		if g.MouseX >= g.ButtonWindowX &&
+			g.MouseX <= g.ButtonWindowX+windowWidth-g.CollapseButton.Width-5 &&
+			g.MouseY >= g.ButtonWindowY &&
+			g.MouseY <= g.ButtonWindowY+titleBarHeight {
+			// Start dragging window
+			g.DraggingButtonWindow = true
+			g.ButtonWindowDragStartX = g.MouseX
+			g.ButtonWindowDragStartY = g.MouseY
+			return nil
+		}
+	}
+
+	// Handle continuous window dragging
+	if g.DraggingButtonWindow && ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		// Calculate movement delta
+		deltaX := g.MouseX - g.ButtonWindowDragStartX
+		deltaY := g.MouseY - g.ButtonWindowDragStartY
+
+		// Update window position
+		g.ButtonWindowX += deltaX
+		g.ButtonWindowY += deltaY
+
+		// Keep window within screen bounds
+		if g.ButtonWindowX < 0 {
+			g.ButtonWindowX = 0
+		} else if g.ButtonWindowX+windowWidth > screenWidth {
+			g.ButtonWindowX = screenWidth - windowWidth
+		}
+
+		if g.ButtonWindowY < 0 {
+			g.ButtonWindowY = 0
+		} else if g.ButtonWindowY+titleBarHeight > screenHeight {
+			g.ButtonWindowY = screenHeight - titleBarHeight
+		}
+
+		// Update drag start position
+		g.ButtonWindowDragStartX = g.MouseX
+		g.ButtonWindowDragStartY = g.MouseY
+		return nil
+	} else if g.DraggingButtonWindow {
+		g.DraggingButtonWindow = false
 	}
 
 	return nil
