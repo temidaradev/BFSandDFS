@@ -155,9 +155,9 @@ func (m *ContextMenu) Draw(screen *ebiten.Image) {
 		}
 
 		// Draw item text with shadow for better visibility
-		textColor := color.RGBA{220, 220, 220, 255}
-		shadowColor := color.RGBA{0, 0, 0, 100}
-		esset.DrawText(screen, item.Label, float64(m.X+11), float64(itemY+m.ItemHeight/2+6), assets.FontFaceS, textColor)
-		esset.DrawText(screen, item.Label, float64(m.X+10), float64(itemY+m.ItemHeight/2+5), assets.FontFaceS, shadowColor)
+		textColor := color.RGBA{255, 255, 255, 255}
+		shadowColor := color.RGBA{0, 0, 0, 70}
+		esset.DrawText(screen, item.Label, float64(m.X+11), float64(itemY+m.ItemHeight/2-5), assets.FontFaceS, textColor)
+		esset.DrawText(screen, item.Label, float64(m.X+10), float64(itemY+m.ItemHeight/2-4), assets.FontFaceS, shadowColor)
 	}
 }
