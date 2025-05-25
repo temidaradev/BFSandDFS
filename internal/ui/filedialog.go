@@ -1,19 +1,17 @@
 package ui
 
 import (
+	"bfsdfs/assets"
 	"image/color"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font/basicfont"
+	"github.com/temidaradev/esset/v2"
 )
 
-// FileDialog represents a file dialog for saving/loading graphs
+// FileDialog represents a simple file dialog for saving/loading graphs
 type FileDialog struct {
 	X, Y            int
 	Width, Height   int
@@ -22,19 +20,11 @@ type FileDialog struct {
 	CurrentDir      string
 	Files           []string
 	SelectedFile    int
-	HoveredFile     int
 	FileName        string
 	CursorPos       int
 	SaveLabel       string
 	ScrollOffset    int
 	MaxVisibleFiles int
-
-	// Animation and hover effects
-	AnimationProgress float64
-	OkButtonHover     bool
-	CancelButtonHover bool
-	LastCursorBlink   time.Time
-	ShowCursor        bool
 }
 
 // NewFileDialog creates a new file dialog
@@ -45,25 +35,16 @@ func NewFileDialog(isSaveDialog bool) *FileDialog {
 		os.MkdirAll(saveDir, 0755)
 	}
 
-	// Get screen dimensions for centering
-	w, h := ebiten.WindowSize()
-	dialogWidth := 500
-	dialogHeight := 450
-
 	dialog := &FileDialog{
-		X:                 (w - dialogWidth) / 2,  // Center horizontally
-		Y:                 (h - dialogHeight) / 2, // Center vertically
-		Width:             dialogWidth,
-		Height:            dialogHeight,
-		IsSaveDialog:      isSaveDialog,
-		CurrentDir:        saveDir,
-		Files:             []string{},
-		SelectedFile:      -1,
-		HoveredFile:       -1,
-		MaxVisibleFiles:   12,
-		AnimationProgress: 0,
-		LastCursorBlink:   time.Now(),
-		ShowCursor:        true,
+		X:               150,
+		Y:               100,
+		Width:           400,
+		Height:          400,
+		IsSaveDialog:    isSaveDialog,
+		CurrentDir:      saveDir,
+		Files:           []string{},
+		SelectedFile:    -1,
+		MaxVisibleFiles: 10,
 	}
 
 	if isSaveDialog {
@@ -80,13 +61,7 @@ func NewFileDialog(isSaveDialog bool) *FileDialog {
 // Show displays the file dialog
 func (fd *FileDialog) Show() {
 	fd.Visible = true
-	fd.AnimationProgress = 0
 	fd.RefreshFiles()
-
-	// Recenter dialog based on current window size
-	w, h := ebiten.WindowSize()
-	fd.X = (w - fd.Width) / 2
-	fd.Y = (h - fd.Height) / 2
 }
 
 // Hide hides the file dialog
@@ -101,76 +76,21 @@ func (fd *FileDialog) RefreshFiles() {
 	// Add parent directory option if not in root
 	parentDir := filepath.Dir(fd.CurrentDir)
 	if parentDir != fd.CurrentDir {
-		fd.Files = append(fd.Files, "../")
+		fd.Files = append(fd.Files, "..")
 	}
 
 	// Read directory contents
 	files, err := os.ReadDir(fd.CurrentDir)
 	if err == nil {
-		// First add directories
 		for _, file := range files {
-			if file.IsDir() {
-				fd.Files = append(fd.Files, file.Name()+"/")
+			if file.IsDir() || (strings.HasSuffix(file.Name(), ".json") && !file.IsDir()) {
+				name := file.Name()
+				if file.IsDir() {
+					name += "/"
+				}
+				fd.Files = append(fd.Files, name)
 			}
 		}
-
-		// Then add JSON files
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				fd.Files = append(fd.Files, file.Name())
-			}
-		}
-	}
-
-	// Reset scroll position when changing directories
-	fd.ScrollOffset = 0
-}
-
-// Update updates the file dialog state (animations, cursor blinking)
-func (fd *FileDialog) Update() {
-	if !fd.Visible {
-		return
-	}
-
-	// Update animation
-	if fd.AnimationProgress < 1.0 {
-		fd.AnimationProgress += 0.1
-		if fd.AnimationProgress > 1.0 {
-			fd.AnimationProgress = 1.0
-		}
-	}
-
-	// Blink cursor every 500ms
-	if time.Since(fd.LastCursorBlink).Milliseconds() > 500 {
-		fd.ShowCursor = !fd.ShowCursor
-		fd.LastCursorBlink = time.Now()
-	}
-
-	// Update button hover states
-	mx, my := ebiten.CursorPosition()
-
-	// OK button hover
-	fd.OkButtonHover = mx >= fd.X+fd.Width-180 && mx <= fd.X+fd.Width-100 &&
-		my >= fd.Y+fd.Height-30 && my <= fd.Y+fd.Height
-
-	// Cancel button hover
-	fd.CancelButtonHover = mx >= fd.X+fd.Width-90 && mx <= fd.X+fd.Width-10 &&
-		my >= fd.Y+fd.Height-30 && my <= fd.Y+fd.Height
-
-	// Update hovered file
-	fileListY := fd.Y + 60
-	fileHeight := 24
-
-	if mx >= fd.X+10 && mx <= fd.X+fd.Width-10 &&
-		my >= fileListY && my <= fileListY+fd.MaxVisibleFiles*fileHeight {
-		hoveredIndex := fd.ScrollOffset + (my-fileListY)/fileHeight
-		if hoveredIndex >= 0 && hoveredIndex < len(fd.Files) {
-			fd.HoveredFile = hoveredIndex
-		} else {
-			fd.HoveredFile = -1
-		}
-	} else {
-		fd.HoveredFile = -1
 	}
 }
 
@@ -180,137 +100,53 @@ func (fd *FileDialog) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Apply animation scaling effect
-	scale := fd.AnimationProgress
-	scaledWidth := int(float64(fd.Width) * scale)
-	scaledHeight := int(float64(fd.Height) * scale)
-
-	// Center the scaled dialog
-	scaledX := fd.X + (fd.Width-scaledWidth)/2
-	scaledY := fd.Y + (fd.Height-scaledHeight)/2
-
-	// Draw semi-transparent overlay
-	overlayColor := color.RGBA{0, 0, 0, 180}
-	overlay := ebiten.NewImage(screen.Bounds().Dx(), screen.Bounds().Dy())
-	overlay.Fill(overlayColor)
-
-	// Only draw overlay if animation is far enough along
-	if fd.AnimationProgress > 0.5 {
-		opacity := (fd.AnimationProgress - 0.5) * 2.0
-		if opacity > 1.0 {
-			opacity = 1.0
-		}
-
-		opts := &ebiten.DrawImageOptions{}
-		opts.ColorM.Scale(1, 1, 1, opacity)
-		screen.DrawImage(overlay, opts)
-	}
-
-	// Skip drawing the rest if animation is just starting
-	if fd.AnimationProgress < 0.2 {
-		return
-	}
-
-	// Draw dialog background with modern effect
-	bg := ebiten.NewImage(scaledWidth, scaledHeight)
-	bg.Fill(color.RGBA{40, 42, 54, 245})
-
+	// Draw dialog background with semi-transparent effect
+	bg := ebiten.NewImage(fd.Width, fd.Height)
+	bg.Fill(color.RGBA{40, 40, 40, 230})
 	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(scaledX), float64(scaledY))
+	opts.GeoM.Translate(float64(fd.X), float64(fd.Y))
 	screen.DrawImage(bg, opts)
 
-	// Only proceed with detailed drawing if animation is far enough along
-	if fd.AnimationProgress < 0.8 {
-		return
-	}
-
-	// Draw modern border with gradient effect
-	borderColor := color.RGBA{80, 100, 140, 255}
-	accentColor := color.RGBA{130, 160, 190, 255}
-
-	// Top border with accent
+	// Draw border with subtle effect
+	borderColor := color.RGBA{80, 80, 80, 255}
 	for i := 0; i < fd.Width; i++ {
-		intensity := uint8(float64(i) / float64(fd.Width) * 70)
-		screen.Set(fd.X+i, fd.Y, color.RGBA{accentColor.R, accentColor.G - intensity, accentColor.B, accentColor.A})
-		screen.Set(fd.X+i, fd.Y+1, color.RGBA{accentColor.R, accentColor.G - intensity, accentColor.B, accentColor.A})
-	}
-
-	// Side and bottom borders
-	for i := 2; i < fd.Height; i++ {
-		screen.Set(fd.X, fd.Y+i, borderColor)
-		screen.Set(fd.X+1, fd.Y+i, borderColor)
-		screen.Set(fd.X+fd.Width-1, fd.Y+i, borderColor)
-		screen.Set(fd.X+fd.Width-2, fd.Y+i, borderColor)
-	}
-
-	for i := 0; i < fd.Width; i++ {
+		screen.Set(fd.X+i, fd.Y, borderColor)
 		screen.Set(fd.X+i, fd.Y+fd.Height-1, borderColor)
-		screen.Set(fd.X+i, fd.Y+fd.Height-2, borderColor)
+	}
+	for i := 0; i < fd.Height; i++ {
+		screen.Set(fd.X, fd.Y+i, borderColor)
+		screen.Set(fd.X+fd.Width-1, fd.Y+i, borderColor)
 	}
 
-	// Draw title with shadow and gradient
-	titleColor := color.RGBA{220, 230, 255, 255}
+	// Draw title with shadow
+	titleColor := color.RGBA{220, 220, 220, 255}
 	shadowColor := color.RGBA{0, 0, 0, 100}
-	text.Draw(screen, fd.SaveLabel, basicfont.Face7x13, fd.X+fd.Width/2-text.BoundString(basicfont.Face7x13, fd.SaveLabel).Dx()/2+1, fd.Y+21, shadowColor)
-	text.Draw(screen, fd.SaveLabel, basicfont.Face7x13, fd.X+fd.Width/2-text.BoundString(basicfont.Face7x13, fd.SaveLabel).Dx()/2, fd.Y+20, titleColor)
+	// text.Draw(screen, fd.SaveLabel, basicfont.Face7x13, fd.X+11, fd.Y+21, shadowColor)
+	// text.Draw(screen, fd.SaveLabel, basicfont.Face7x13, fd.X+10, fd.Y+20, titleColor)
+	esset.DrawText(screen, fd.SaveLabel, float64(fd.X+11), float64(fd.Y), assets.FontFaceS, shadowColor)
+	esset.DrawText(screen, fd.SaveLabel, float64(fd.X+10), float64(fd.Y), assets.FontFaceS, titleColor)
 
-	// Draw current directory with better styling
-	dirText := fd.CurrentDir
-	// Truncate with ellipsis if too long
-	if len(dirText) > (fd.Width-40)/7 { // Rough estimate for character width
-		dirText = "..." + dirText[len(dirText)-(fd.Width-40)/7+3:]
+	// Draw current directory with improved styling
+	dirText := "Directory: " + fd.CurrentDir
+	if len(dirText) > 50 {
+		dirText = "..." + dirText[len(dirText)-47:]
 	}
-
-	dirColor := color.RGBA{180, 200, 255, 255}
-	dirBg := ebiten.NewImage(fd.Width-20, 20)
-	dirBg.Fill(color.RGBA{30, 35, 45, 255})
-
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(fd.X+10), float64(fd.Y+35))
-	screen.DrawImage(dirBg, opts)
-
-	text.Draw(screen, dirText, basicfont.Face7x13, fd.X+15, fd.Y+48, dirColor)
+	dirColor := color.RGBA{180, 180, 255, 255}
+	// text.Draw(screen, dirText, basicfont.Face7x13, fd.X+11, fd.Y+41, shadowColor)
+	// text.Draw(screen, dirText, basicfont.Face7x13, fd.X+10, fd.Y+40, dirColor)
+	esset.DrawText(screen, dirText, float64(fd.X+11), float64(fd.Y+41), assets.FontFaceS, shadowColor)
+	esset.DrawText(screen, dirText, float64(fd.X+10), float64(fd.Y+40), assets.FontFaceS, dirColor)
 
 	// Draw separator
-	separator := ebiten.NewImage(fd.Width-20, 2)
-	separator.Fill(color.RGBA{70, 80, 100, 255})
-
+	separator := ebiten.NewImage(fd.Width-20, 1)
+	separator.Fill(color.RGBA{60, 60, 60, 255})
 	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(fd.X+10), float64(fd.Y+55))
+	opts.GeoM.Translate(float64(fd.X+10), float64(fd.Y+45))
 	screen.DrawImage(separator, opts)
 
-	// Draw file list with improved styling
+	// Draw file list
 	fileListY := fd.Y + 60
-	fileHeight := 24
-	fileListBg := ebiten.NewImage(fd.Width-20, fd.MaxVisibleFiles*fileHeight)
-	fileListBg.Fill(color.RGBA{25, 28, 38, 255})
-
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(fd.X+10), float64(fileListY))
-	screen.DrawImage(fileListBg, opts)
-
-	// Draw scrollbar background
-	scrollbarBg := ebiten.NewImage(8, fd.MaxVisibleFiles*fileHeight)
-	scrollbarBg.Fill(color.RGBA{40, 45, 60, 255})
-
-	opts = &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(fd.X+fd.Width-18), float64(fileListY))
-	screen.DrawImage(scrollbarBg, opts)
-
-	// Draw scrollbar handle if needed
-	if len(fd.Files) > fd.MaxVisibleFiles {
-		scrollbarHeight := float64(fd.MaxVisibleFiles*fileHeight) * float64(fd.MaxVisibleFiles) / float64(len(fd.Files))
-		scrollbarY := float64(fileListY) + float64(fd.MaxVisibleFiles*fileHeight)*float64(fd.ScrollOffset)/float64(len(fd.Files))
-
-		scrollbar := ebiten.NewImage(8, int(scrollbarHeight))
-		scrollbar.Fill(color.RGBA{100, 120, 160, 255})
-
-		opts = &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(float64(fd.X+fd.Width-18), scrollbarY)
-		screen.DrawImage(scrollbar, opts)
-	}
-
-	// Draw files with improved styling
+	fileHeight := 20
 	endIdx := fd.ScrollOffset + fd.MaxVisibleFiles
 	if endIdx > len(fd.Files) {
 		endIdx = len(fd.Files)
@@ -319,166 +155,97 @@ func (fd *FileDialog) Draw(screen *ebiten.Image) {
 	for i := fd.ScrollOffset; i < endIdx; i++ {
 		y := fileListY + (i-fd.ScrollOffset)*fileHeight
 
-		// Draw selection or hover highlight with animation effects
+		// Draw selection highlight
 		if i == fd.SelectedFile {
-			selectionBg := ebiten.NewImage(fd.Width-28, fileHeight)
-
-			// Gradient for selected item
-			for j := 0; j < fileHeight; j++ {
-				progress := float64(j) / float64(fileHeight)
-				r := uint8(80 - progress*20)
-				g := uint8(110 - progress*20)
-				b := uint8(180 - progress*20)
-
-				for k := 0; k < fd.Width-28; k++ {
-					selectionBg.Set(k, j, color.RGBA{r, g, b, 255})
-				}
-			}
-
-			// Add highlight to left edge for emphasis
-			for j := 0; j < fileHeight; j++ {
-				for k := 0; k < 3; k++ {
-					selectionBg.Set(k, j, color.RGBA{130, 170, 255, 255})
-				}
-			}
-
+			selectionBg := ebiten.NewImage(fd.Width-20, fileHeight)
+			selectionBg.Fill(color.RGBA{70, 90, 120, 255})
 			opts = &ebiten.DrawImageOptions{}
 			opts.GeoM.Translate(float64(fd.X+10), float64(y))
 			screen.DrawImage(selectionBg, opts)
-		} else if i == fd.HoveredFile {
-			hoverBg := ebiten.NewImage(fd.Width-28, fileHeight)
-			hoverBg.Fill(color.RGBA{60, 70, 110, 255})
-
-			// Animate hover effect
-			now := time.Now()
-			pulseIntensity := float64(now.UnixNano()%1000000000) / 1000000000.0
-			pulseIntensity = (math.Sin(pulseIntensity*math.Pi*2) + 1) / 2 * 20
-
-			// Add subtle highlight to left edge
-			for j := 0; j < fileHeight; j++ {
-				for k := 0; k < 2; k++ {
-					hoverBg.Set(k, j, color.RGBA{80 + uint8(pulseIntensity), 100 + uint8(pulseIntensity), 150 + uint8(pulseIntensity), 255})
-				}
-			}
-
-			opts = &ebiten.DrawImageOptions{}
-			opts.GeoM.Translate(float64(fd.X+10), float64(y))
-			screen.DrawImage(hoverBg, opts)
 		}
 
-		// Draw file icon based on type
+		// Draw file name with shadow
 		fileName := fd.Files[i]
-		var fileIcon string
-		var fileColor color.RGBA
-
+		fileColor := color.RGBA{220, 220, 220, 255}
 		if strings.HasSuffix(fileName, "/") {
-			if fileName == "../" {
-				fileIcon = "↑ "
-				fileColor = color.RGBA{180, 210, 255, 255}
-			} else {
-				fileIcon = "📁 "
-				fileColor = color.RGBA{180, 210, 255, 255}
-			}
-		} else if strings.HasSuffix(fileName, ".json") {
-			fileIcon = "📄 "
-			fileColor = color.RGBA{230, 230, 240, 255}
-		} else {
-			fileIcon = "📄 "
-			fileColor = color.RGBA{200, 200, 210, 255}
+			fileColor = color.RGBA{180, 180, 255, 255}
 		}
-
-		// Draw file name with icon and shadow for better readability
-		displayName := fileIcon + fileName
-		text.Draw(screen, displayName, basicfont.Face7x13, fd.X+16, y+fileHeight/2+5, color.RGBA{20, 20, 30, 100})
-		text.Draw(screen, displayName, basicfont.Face7x13, fd.X+15, y+fileHeight/2+4, fileColor)
+		// text.Draw(screen, fileName, basicfont.Face7x13, fd.X+16, y+16, shadowColor)
+		// text.Draw(screen, fileName, basicfont.Face7x13, fd.X+15, y+15, fileColor)
+		esset.DrawText(screen, fileName, float64(fd.X+16), float64(y+6), assets.FontFaceS, shadowColor)
+		esset.DrawText(screen, fileName, float64(fd.X+15), float64(y+5), assets.FontFaceS, fileColor)
 	}
 
-	// Draw bottom separator
-	separator = ebiten.NewImage(fd.Width-20, 2)
-	separator.Fill(color.RGBA{70, 80, 100, 255})
-
+	// Draw separator
+	separator = ebiten.NewImage(fd.Width-20, 1)
+	separator.Fill(color.RGBA{60, 60, 60, 255})
 	opts = &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(fd.X+10), float64(fd.Y+fd.Height-80))
 	screen.DrawImage(separator, opts)
 
-	// Draw filename input for save dialog with improved styling
+	// Draw filename input for save dialog
 	if fd.IsSaveDialog {
-		text.Draw(screen, "Filename:", basicfont.Face7x13, fd.X+15, fd.Y+fd.Height-59, color.RGBA{200, 210, 255, 255})
+		// text.Draw(screen, "Filename:", basicfont.Face7x13, fd.X+11, fd.Y+fd.Height-59, shadowColor)
+		// text.Draw(screen, "Filename:", basicfont.Face7x13, fd.X+10, fd.Y+fd.Height-60, titleColor)
+		esset.DrawText(screen, "Filename:", float64(fd.X+11), float64(fd.Y+fd.Height-9), assets.FontFaceS, shadowColor)
+		esset.DrawText(screen, "Filename:", float64(fd.X+10), float64(fd.Y+fd.Height-10), assets.FontFaceS, titleColor)
 
-		// Input field background with better styling
-		inputBg := ebiten.NewImage(fd.Width-30, 28)
-		inputBg.Fill(color.RGBA{25, 28, 38, 255})
-
+		// Input field background
+		inputBg := ebiten.NewImage(fd.Width-20, 25)
+		inputBg.Fill(color.RGBA{30, 30, 30, 255})
 		opts = &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(float64(fd.X+15), float64(fd.Y+fd.Height-55))
+		opts.GeoM.Translate(float64(fd.X+10), float64(fd.Y+fd.Height-55))
 		screen.DrawImage(inputBg, opts)
 
-		// Draw input field border with focus effect
-		inputBorderColor := color.RGBA{80, 100, 140, 255}
-		for i := 0; i < fd.Width-30; i++ {
-			screen.Set(fd.X+15+i, fd.Y+fd.Height-55, inputBorderColor)
-			screen.Set(fd.X+15+i, fd.Y+fd.Height-28, inputBorderColor)
+		// Draw input field border
+		inputBorderColor := color.RGBA{80, 80, 80, 255}
+		for i := 0; i < fd.Width-20; i++ {
+			screen.Set(fd.X+10+i, fd.Y+fd.Height-55, inputBorderColor)
+			screen.Set(fd.X+10+i, fd.Y+fd.Height-30, inputBorderColor)
 		}
-		for i := 0; i < 28; i++ {
-			screen.Set(fd.X+15, fd.Y+fd.Height-55+i, inputBorderColor)
-			screen.Set(fd.X+15, fd.Y+fd.Height-55+i, inputBorderColor)
+		for i := 0; i < 25; i++ {
+			screen.Set(fd.X+10, fd.Y+fd.Height-55+i, inputBorderColor)
+			screen.Set(fd.X+fd.Width-10, fd.Y+fd.Height-55+i, inputBorderColor)
 		}
 
-		// Draw filename text
-		text.Draw(screen, fd.FileName, basicfont.Face7x13, fd.X+20, fd.Y+fd.Height-38, color.RGBA{220, 230, 250, 255})
+		// Draw filename text with shadow
+		// text.Draw(screen, fd.FileName, basicfont.Face7x13, fd.X+16, fd.Y+fd.Height-37, shadowColor)
+		// text.Draw(screen, fd.FileName, basicfont.Face7x13, fd.X+15, fd.Y+fd.Height-38, color.RGBA{220, 220, 220, 255})
+		esset.DrawText(screen, fd.FileName, float64(fd.X+16), float64(fd.Y+fd.Height), assets.FontFaceS, shadowColor)
+		esset.DrawText(screen, fd.FileName, float64(fd.X+15), float64(fd.Y+fd.Height), assets.FontFaceS, color.RGBA{220, 220, 220, 255})
 
-		// Draw blinking cursor with improved visibility
-		if fd.ShowCursor {
-			cursorPos := text.BoundString(basicfont.Face7x13, fd.FileName[:fd.CursorPos]).Dx()
-			cursorHeight := 18
-			cursorColor := color.RGBA{220, 230, 250, 255}
-			for i := 0; i < cursorHeight; i++ {
-				screen.Set(fd.X+20+cursorPos, fd.Y+fd.Height-48+i, cursorColor)
-			}
+		// Draw cursor with improved visibility
+		cursorPosX, _ := MeasureText(assets.FontFaceS, dirText)
+		cursorHeight := 18
+		cursorColor := color.RGBA{220, 220, 220, 255}
+		for i := 0; i < cursorHeight; i++ {
+			screen.Set(fd.X+15+int(cursorPosX), fd.Y+fd.Height-48+i, cursorColor)
 		}
 	}
 
-	// Draw OK and Cancel buttons with improved styling and hover effects
-	okBtnColor := color.RGBA{60, 130, 180, 255}
-	if fd.OkButtonHover {
-		okBtnColor = color.RGBA{80, 150, 200, 255}
-	}
-
-	cancelBtnColor := color.RGBA{180, 70, 70, 255}
-	if fd.CancelButtonHover {
-		cancelBtnColor = color.RGBA{200, 90, 90, 255}
-	}
-
-	// Draw button backgrounds
+	// Draw OK and Cancel buttons with improved styling
 	okBtnBg := ebiten.NewImage(80, 30)
-	okBtnBg.Fill(okBtnColor)
-
+	okBtnBg.Fill(color.RGBA{70, 130, 180, 255})
 	opts = &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(fd.X+fd.Width-180), float64(fd.Y+fd.Height-30))
 	screen.DrawImage(okBtnBg, opts)
 
 	cancelBtnBg := ebiten.NewImage(80, 30)
-	cancelBtnBg.Fill(cancelBtnColor)
-
+	cancelBtnBg.Fill(color.RGBA{180, 70, 70, 255})
 	opts = &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(fd.X+fd.Width-90), float64(fd.Y+fd.Height-30))
 	screen.DrawImage(cancelBtnBg, opts)
 
-	// Draw button text centered
-	okText := "OK"
-	okWidth := text.BoundString(basicfont.Face7x13, okText).Dx()
-	okX := fd.X + fd.Width - 180 + (80-okWidth)/2
-
-	cancelText := "Cancel"
-	cancelWidth := text.BoundString(basicfont.Face7x13, cancelText).Dx()
-	cancelX := fd.X + fd.Width - 90 + (80-cancelWidth)/2
-
 	// Draw button text with shadows
-	text.Draw(screen, okText, basicfont.Face7x13, okX+1, fd.Y+fd.Height-11, shadowColor)
-	text.Draw(screen, okText, basicfont.Face7x13, okX, fd.Y+fd.Height-12, color.White)
+	// text.Draw(screen, "OK", basicfont.Face7x13, fd.X+fd.Width-149, fd.Y+fd.Height-9, shadowColor)
+	// text.Draw(screen, "OK", basicfont.Face7x13, fd.X+fd.Width-150, fd.Y+fd.Height-10, color.White)
+	esset.DrawText(screen, "OK", float64(fd.X+fd.Width-149), float64(fd.Y+fd.Height-19), assets.FontFaceS, shadowColor)
+	esset.DrawText(screen, "OK", float64(fd.X+fd.Width-150), float64(fd.Y+fd.Height-20), assets.FontFaceS, color.White)
 
-	text.Draw(screen, cancelText, basicfont.Face7x13, cancelX+1, fd.Y+fd.Height-11, shadowColor)
-	text.Draw(screen, cancelText, basicfont.Face7x13, cancelX, fd.Y+fd.Height-12, color.White)
+	// text.Draw(screen, "Cancel", basicfont.Face7x13, fd.X+fd.Width-69, fd.Y+fd.Height-9, shadowColor)
+	// text.Draw(screen, "Cancel", basicfont.Face7x13, fd.X+fd.Width-70, fd.Y+fd.Height-10, color.White)
+	esset.DrawText(screen, "Cancel", float64(fd.X+fd.Width-69), float64(fd.Y+fd.Height-19), assets.FontFaceS, shadowColor)
+	esset.DrawText(screen, "Cancel", float64(fd.X+fd.Width-70), float64(fd.Y+fd.Height-20), assets.FontFaceS, color.White)
 }
 
 // HandleClick processes clicks within the file dialog
@@ -495,17 +262,17 @@ func (fd *FileDialog) HandleClick(x, y int) bool {
 
 	// File list area
 	fileListY := fd.Y + 60
-	fileHeight := 24
+	fileHeight := 20
 	fileListHeight := fd.MaxVisibleFiles * fileHeight
 
-	if x >= fd.X+10 && x <= fd.X+fd.Width-20 &&
+	if x >= fd.X+10 && x <= fd.X+fd.Width-10 &&
 		y >= fileListY && y <= fileListY+fileListHeight {
 		// Clicked on file list
 		clickedIndex := fd.ScrollOffset + (y-fileListY)/fileHeight
 		if clickedIndex >= 0 && clickedIndex < len(fd.Files) {
 			// If clicking on a directory
 			if strings.HasSuffix(fd.Files[clickedIndex], "/") {
-				if fd.Files[clickedIndex] == "../" {
+				if fd.Files[clickedIndex] == ".." {
 					// Go up one directory
 					fd.CurrentDir = filepath.Dir(fd.CurrentDir)
 				} else {
@@ -525,36 +292,16 @@ func (fd *FileDialog) HandleClick(x, y int) bool {
 		}
 	}
 
-	// Check for scrollbar clicks
-	scrollbarX := fd.X + fd.Width - 18
-	if x >= scrollbarX && x <= scrollbarX+8 &&
-		y >= fileListY && y <= fileListY+fd.MaxVisibleFiles*fileHeight {
-
-		// Calculate relative position in scrollbar
-		relativeY := y - fileListY
-		relativePos := float64(relativeY) / float64(fd.MaxVisibleFiles*fileHeight)
-
-		// Set scroll position
-		if len(fd.Files) > fd.MaxVisibleFiles {
-			fd.ScrollOffset = int(relativePos * float64(len(fd.Files)-fd.MaxVisibleFiles))
-			if fd.ScrollOffset < 0 {
-				fd.ScrollOffset = 0
-			}
-			if fd.ScrollOffset > len(fd.Files)-fd.MaxVisibleFiles {
-				fd.ScrollOffset = len(fd.Files) - fd.MaxVisibleFiles
-			}
-		}
-		return true
-	}
-
 	// OK button
-	if fd.OkButtonHover {
-		// OK button was clicked
+	if x >= fd.X+fd.Width-180 && x <= fd.X+fd.Width-100 &&
+		y >= fd.Y+fd.Height-30 && y <= fd.Y+fd.Height {
+		// Handle OK button
 		return true
 	}
 
 	// Cancel button
-	if fd.CancelButtonHover {
+	if x >= fd.X+fd.Width-90 && x <= fd.X+fd.Width-10 &&
+		y >= fd.Y+fd.Height-30 && y <= fd.Y+fd.Height {
 		fd.Hide()
 		return true
 	}

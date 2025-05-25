@@ -9,10 +9,21 @@ import (
 	"bfsdfs/pkg/draw"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/temidaradev/esset/v2"
+	"github.com/temidaradev/esset/v2/example/assets"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 )
+
+func init() {
+	assets.FontFaceS, _ = esset.GetFont(assets.MyFont, 12)
+}
+
+func MeasureText(face text.Face, s string) (width, height float64) {
+	width, height = text.Measure(s, face, 0)
+	return
+}
 
 // Draw renders the game screen
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -98,7 +109,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Draw window title
 	titleText := "Graph Controls"
-	text.Draw(screen, titleText, basicfont.Face7x13, g.ButtonWindowX+10, g.ButtonWindowY+16, color.White)
+	//text.Draw(screen, titleText, basicfont.Face7x13, g.ButtonWindowX+10, g.ButtonWindowY+16, color.White)
+	esset.DrawText(screen, titleText, float64(g.ButtonWindowX+10), float64(g.ButtonWindowY+5), assets.FontFaceS, color.White)
 
 	// Draw collapse button in title bar
 	collapseButtonWidth := 25
@@ -121,8 +133,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		collapseText = "<<"
 	}
 	textX := collapseButtonX + (collapseButtonWidth-len(collapseText)*7)/2 // Approximate width
-	textY := collapseButtonY + 15
-	text.Draw(screen, collapseText, basicfont.Face7x13, textX, textY, color.White)
+	textY := collapseButtonY + 2
+	//text.Draw(screen, collapseText, basicfont.Face7x13, textX, textY, color.White)
+	esset.DrawText(screen, collapseText, float64(textX), float64(textY), assets.FontFaceS, color.White)
 
 	// Store collapse button bounds for click detection
 	g.CollapseButton.X = collapseButtonX
@@ -207,7 +220,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			orderStr += string(rune('A' + nodeIdx))
 		}
 		// Position visit order at the top, slightly below the screen edge
-		text.Draw(screen, orderStr, basicfont.Face7x13, 20, 20, color.Black)
+		//text.Draw(screen, orderStr, basicfont.Face7x13, 20, 20, color.Black)
+		esset.DrawText(screen, orderStr, 20, 10, assets.FontFaceS, color.Black)
 
 		// Draw queue or stack status
 		var dataStructStr string
@@ -229,22 +243,26 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 		}
 		// Position queue/stack status below visit order
-		text.Draw(screen, dataStructStr, basicfont.Face7x13, 20, 40, color.Black)
+		//text.Draw(screen, dataStructStr, basicfont.Face7x13, 20, 40, color.Black)
+		esset.DrawText(screen, dataStructStr, 20, 30, assets.FontFaceS, color.Black)
 	} else if g.Sim.Mode == algorithms.ModeAVL {
 		// Draw AVL tree info
 		avlInfoStr := "AVL Tree Mode"
-		text.Draw(screen, avlInfoStr, basicfont.Face7x13, 20, 20, color.Black)
+		//text.Draw(screen, avlInfoStr, basicfont.Face7x13, 20, 20, color.Black)
+		esset.DrawText(screen, avlInfoStr, 20, 10, assets.FontFaceS, color.Black)
 
 		// Show current action if any
 		if g.Sim.GetAVLAction() != "" {
 			actionStr := fmt.Sprintf("Last Action: %s", g.Sim.GetAVLAction())
-			text.Draw(screen, actionStr, basicfont.Face7x13, 20, 40, color.Black)
+			//text.Draw(screen, actionStr, basicfont.Face7x13, 20, 40, color.Black)
+			esset.DrawText(screen, actionStr, 20, 30, assets.FontFaceS, color.Black)
 		}
 
 		// Show tree statistics
 		if g.Sim.GetAVLTree() != nil && g.Sim.GetAVLTree().Root != nil {
 			heightStr := fmt.Sprintf("Tree Height: %d", g.Sim.GetAVLTree().Root.Height)
-			text.Draw(screen, heightStr, basicfont.Face7x13, 20, 60, color.Black)
+			//text.Draw(screen, heightStr, basicfont.Face7x13, 20, 60, color.Black)
+			esset.DrawText(screen, heightStr, 20, 50, assets.FontFaceS, color.Black)
 		}
 	}
 
@@ -262,13 +280,15 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		messageOpts.GeoM.Translate(float64(messageBgX), float64(messageBgY))
 		screen.DrawImage(messageBg, messageOpts)
 
-		// Message text
 		messageText := g.Message
-		// Center the text within the background
-		messageBounds := text.BoundString(basicfont.Face7x13, messageText)
-		messageTextX := messageBgX + (messageBgWidth-messageBounds.Dx())/2
-		messageTextY := messageBgY + (messageBgHeight-messageBounds.Dy())/2 + basicfont.Face7x13.Ascent
-		text.Draw(screen, messageText, basicfont.Face7x13, messageTextX, messageTextY, color.White)
+
+		messageWidth, messageHeight := MeasureText(assets.FontFaceS, messageText)
+
+		messageTextX := float64(messageBgX) + (float64(messageBgWidth)-messageWidth)/2
+		messageTextY := float64(messageBgY) + (float64(messageBgHeight)-messageHeight)/2
+
+		esset.DrawText(screen, messageText, messageTextX, messageTextY, assets.FontFaceS, color.White)
+
 	}
 
 	// Draw speed slider
@@ -299,8 +319,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Speed label
 	speedLabel := fmt.Sprintf("Speed: %d", 50-g.StepDelay+10)
-	// Position speed label to the left of the slider
-	text.Draw(screen, speedLabel, basicfont.Face7x13, sliderBgX-text.BoundString(basicfont.Face7x13, speedLabel).Dx()-10, sliderBgY+text.BoundString(basicfont.Face7x13, speedLabel).Dy()/2+basicfont.Face7x13.Ascent/2, color.Black)
+	labelWidth, labelHeight := MeasureText(assets.FontFaceS, speedLabel)
+
+	x := float64(sliderBgX) - labelWidth - 10
+	y := float64(sliderBgY) + labelHeight/2 - 6 // Rough vertical center
+
+	esset.DrawText(screen, speedLabel, x, y, assets.FontFaceS, color.Black)
 
 	// Draw Help Overlay
 	if g.ShowHelp {
@@ -343,7 +367,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		// Modal title
 		title := fmt.Sprintf("%s Value", strings.Title(g.AVLAction))
-		text.Draw(screen, title, basicfont.Face7x13, modalX+10, modalY+20, color.Black)
+		//text.Draw(screen, title, basicfont.Face7x13, modalX+10, modalY+20, color.Black)
+		esset.DrawText(screen, title, float64(modalX+10), float64(modalY+10), assets.FontFaceS, color.Black)
 
 		// Input field background
 		inputWidth := 280
@@ -357,7 +382,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		screen.DrawImage(inputBg, opts)
 
 		// Input field text
-		text.Draw(screen, g.AVLInputText, basicfont.Face7x13, inputX+5, inputY+inputHeight/2+basicfont.Face7x13.Ascent/2, color.Black)
+		//text.Draw(screen, g.AVLInputText, basicfont.Face7x13, inputX+5, inputY+inputHeight/2+basicfont.Face7x13.Ascent/2, color.Black)
+		esset.DrawText(screen, g.AVLInputText, float64(inputX+5), float64(inputY+inputHeight/2+basicfont.Face7x13.Ascent/2-10), assets.FontFaceS, color.Black)
 
 		// Action buttons
 		buttonWidth := 80
@@ -385,10 +411,12 @@ func drawButton(screen *ebiten.Image, x, y, width, height int, textLabel string,
 	screen.DrawImage(buttonImage, opts)
 
 	// Draw button text
-	bounds := text.BoundString(face, textLabel)
-	textX := x + (width-bounds.Dx())/2
-	textY := y + (height-bounds.Dy())/2 + basicfont.Face7x13.Ascent
-	text.Draw(screen, textLabel, face, textX, textY, textColor)
+	labelWidth, labelHeight := text.Measure(textLabel, assets.FontFaceS, 0)
+
+	textX := float64(x) + (float64(width)-labelWidth)/2
+	textY := float64(y) + (float64(height)-labelHeight)/2
+
+	esset.DrawText(screen, textLabel, textX, textY, assets.FontFaceS, textColor)
 }
 
 // drawHelpOverlay draws the help information overlay
@@ -431,12 +459,17 @@ View Controls:
 Context Menu:
   Right Click on node or empty area
 `
-	text.Draw(screen, helpText, basicfont.Face7x13, helpBgX+20, helpBgY+20, color.Black)
+	esset.DrawText(screen, helpText, float64(helpBgX+20), float64(helpBgY+20), assets.FontFaceS, color.Black)
 
-	// Close instruction
+	// Draw close instruction (bottom-right, 20px padding)
 	closeText := "Press H to close"
-	closeBounds := text.BoundString(basicfont.Face7x13, closeText)
-	text.Draw(screen, closeText, basicfont.Face7x13, helpBgX+helpBgWidth-closeBounds.Dx()-20, helpBgY+helpBgHeight-20, color.Black)
+	closeWidth, _ := text.Measure(closeText, assets.FontFaceS, 0)
+
+	closeTextX := float64(helpBgX+helpBgWidth) - closeWidth - 20
+	closeTextY := float64(helpBgY+helpBgHeight) - 20 // already bottom padding
+
+	esset.DrawText(screen, closeText, closeTextX, closeTextY, assets.FontFaceS, color.Black)
+
 }
 
 // drawGraph draws the normal graph visualization
@@ -520,7 +553,8 @@ func (g *Game) drawGraph(canvas *ebiten.Image, screenWidth, screenHeight int) {
 
 			// Draw node label
 			label := string(rune('A' + i))
-			text.Draw(canvas, label, basicfont.Face7x13, int(x)-3, int(y)+4, color.White)
+			//text.Draw(canvas, label, basicfont.Face7x13, int(x)-3, int(y)+4, color.White)
+			esset.DrawText(canvas, label, float64(int(x)-4), float64(int(y)-7), assets.FontFaceS, color.White)
 		}
 	}
 }
@@ -576,19 +610,22 @@ func (g *Game) drawAVLNode(canvas *ebiten.Image, node *algorithms.AVLNode) {
 
 	// Draw node value
 	valueText := fmt.Sprintf("%d", node.Value)
-	valueBounds := text.BoundString(basicfont.Face7x13, valueText)
-	text.Draw(canvas, valueText, basicfont.Face7x13,
-		int(x)-valueBounds.Dx()/2,
-		int(y)+valueBounds.Dy()/2,
-		color.White)
+	valueWidth, valueHeight := text.Measure(valueText, assets.FontFaceS, 0)
+
+	// Center horizontally at x, vertically align baseline approximately at y
+	valueX := float64(x) - valueWidth/2
+	valueY := float64(y) + valueHeight*0.8 // baseline approximation
+
+	esset.DrawText(canvas, valueText, valueX, valueY, assets.FontFaceS, color.White)
 
 	// Draw height below the node
 	heightText := fmt.Sprintf("h:%d", node.Height)
-	heightBounds := text.BoundString(basicfont.Face7x13, heightText)
-	text.Draw(canvas, heightText, basicfont.Face7x13,
-		int(x)-heightBounds.Dx()/2,
-		int(y)+35, // Fixed offset of 35 pixels below node
-		color.Black)
+	heightWidth, heightHeight := text.Measure(heightText, assets.FontFaceS, 0)
+
+	heightX := float64(x) - heightWidth/2
+	heightY := float64(y) + 35 + heightHeight*0.8 // 35 px below + baseline approx
+
+	esset.DrawText(canvas, heightText, heightX, heightY, assets.FontFaceS, color.Black)
 }
 
 // drawAVLEdge draws an edge between two AVL tree nodes

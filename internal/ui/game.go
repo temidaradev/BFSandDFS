@@ -5,14 +5,14 @@ import (
 	"image/color"
 	"time"
 
+	"bfsdfs/assets"
 	"bfsdfs/internal/algorithms"
 	"bfsdfs/internal/graph"
 	"bfsdfs/internal/simulator"
 	"bfsdfs/pkg/draw"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font/basicfont"
+	"github.com/temidaradev/esset/v2"
 )
 
 // Button represents a clickable UI button
@@ -26,6 +26,10 @@ type Button struct {
 	// Anchor properties for HUD positioning
 	AnchorRight  bool // If true, X position is calculated from right edge
 	AnchorBottom bool // If true, Y position is calculated from bottom edge
+}
+
+func init() {
+	assets.FontFaceS, _ = esset.GetFont(assets.MyFont, 12)
 }
 
 // IsInside checks if coordinates are inside the button
@@ -87,14 +91,16 @@ func (b *Button) Draw(screen *ebiten.Image, g *Game) {
 	screen.DrawImage(bg, opts)
 
 	// Draw button text (centered)
-	textWidth := len(b.Text) * 7 // Approximate width based on basicfont
-	textX := btnX + (b.Width-textWidth)/2
-	textY := btnY + b.Height/2 + 5 // +5 for centering with basicfont
+	textWidth := len(b.Text) * 6 // Approximate width based on basicfont
+	textX := btnX + (b.Width-textWidth)/2 - 4
+	textY := btnY + b.Height/2 - 7
 
 	// Add text shadow for better visibility
 	shadowColor := color.RGBA{0, 0, 0, 100}
-	text.Draw(screen, b.Text, basicfont.Face7x13, textX+1, textY+1, shadowColor)
-	text.Draw(screen, b.Text, basicfont.Face7x13, textX, textY, b.TextColor)
+	//text.Draw(screen, b.Text, basicfont.Face7x13, textX+1, textY+1, shadowColor)
+	//text.Draw(screen, b.Text, basicfont.Face7x13, textX, textY, b.TextColor)
+	esset.DrawText(screen, b.Text, float64(textX+1), float64(textY+1), assets.FontFaceS, shadowColor)
+	esset.DrawText(screen, b.Text, float64(textX), float64(textY), assets.FontFaceS, b.TextColor)
 }
 
 // Game represents the Ebiten game that visualizes the simulation

@@ -8,9 +8,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font"
+	"github.com/temidaradev/esset/v2"
 
+	"bfsdfs/assets"
 	"bfsdfs/internal/algorithms"
 	"bfsdfs/internal/simulator"
 )
@@ -18,21 +18,17 @@ import (
 // UI represents the user interface
 type UI struct {
 	simulator *simulator.Simulator
-	font      font.Face
-	smallFont font.Face
 	buttons   []*Button
 }
 
 // NewUI creates a new UI instance
 func NewUI(sim *simulator.Simulator) *UI {
 	// Use the default font
-	fontFace := text.FaceWithLineHeight(nil, 24)
-	smallFontFace := text.FaceWithLineHeight(nil, 16)
+	// fontFace := text.FaceWithLineHeight(nil, 24)
+	// smallFontFace := text.FaceWithLineHeight(nil, 16)
 
 	ui := &UI{
 		simulator: sim,
-		font:      fontFace,
-		smallFont: smallFontFace,
 	}
 
 	// Create buttons
@@ -263,7 +259,8 @@ func (u *UI) Draw(screen *ebiten.Image) {
 	case algorithms.ModeKosaraju:
 		title = "Kosaraju's SCC"
 	}
-	text.Draw(screen, title, u.font, 20, 30, color.Black)
+	//text.Draw(screen, title, u.font, 20, 30, color.Black)
+	esset.DrawText(screen, title, 20, 60, assets.FontFaceS, color.Black)
 
 	// Draw buttons
 	for _, button := range u.buttons {
@@ -296,7 +293,8 @@ func (u *UI) Draw(screen *ebiten.Image) {
 	case algorithms.ModeIdle:
 		modeText += "Idle"
 	}
-	text.Draw(screen, modeText, u.font, 20, 90, color.Black)
+	//text.Draw(screen, modeText, u.font, 20, 90, color.Black)
+	esset.DrawText(screen, modeText, 20, 90, assets.FontFaceS, color.Black)
 
 	// Draw AVL tree if in AVL mode
 	if u.simulator.GetMode() == algorithms.ModeAVL {
@@ -331,8 +329,8 @@ func (u *UI) drawGraph(screen *ebiten.Image) {
 
 				// Draw weight
 				weightText := fmt.Sprintf("%.1f", node.Weights[j])
-				text.Draw(screen, weightText, u.smallFont,
-					midX, midY, color.RGBA{128, 128, 128, 255})
+				//text.Draw(screen, weightText, u.smallFont,midX, midY, color.RGBA{128, 128, 128, 255})
+				esset.DrawText(screen, weightText, float64(midX), float64(midY), assets.FontFaceS, color.RGBA{128, 128, 128, 255})
 			}
 		}
 	}
@@ -353,10 +351,11 @@ func (u *UI) drawGraph(screen *ebiten.Image) {
 
 		// Draw node number
 		nodeText := strconv.Itoa(i)
-		bounds := text.BoundString(u.font, nodeText)
-		text.Draw(screen, nodeText, u.font,
-			node.X-bounds.Dx()/2,
-			node.Y+bounds.Dy()/2,
+		boundsX, boundsY := MeasureText(assets.FontFaceS, nodeText)
+		esset.DrawText(screen, nodeText,
+			float64(float64(node.X)-boundsX/2),
+			float64(float64(node.Y)+boundsY/2),
+			assets.FontFaceS,
 			color.White)
 	}
 }
@@ -397,18 +396,15 @@ func (u *UI) drawAVLNode(screen *ebiten.Image, node *algorithms.AVLNode) {
 
 	// Draw node value
 	valueText := strconv.Itoa(node.Value)
-	bounds := text.BoundString(u.font, valueText)
-	text.Draw(screen, valueText, u.font,
-		node.Position.X-bounds.Dx()/2,
-		node.Position.Y+bounds.Dy()/2,
-		color.White)
+	boundsX, boundsY := MeasureText(assets.FontFaceS, valueText)
+	esset.DrawText(screen, valueText, float64(float64(node.Position.X)-boundsX/2), float64(float64(node.Position.Y)+boundsY/2), assets.FontFaceS, color.White)
 
 	// Draw height
 	heightText := strconv.Itoa(node.Height)
-	bounds = text.BoundString(u.smallFont, heightText)
-	text.Draw(screen, heightText, u.smallFont,
-		node.Position.X-bounds.Dx()/2,
-		node.Position.Y+30,
+	esset.DrawText(screen, heightText,
+		float64(float64(node.Position.X)-boundsX/2),
+		float64(float64(node.Position.Y)+30),
+		assets.FontFaceS,
 		color.Black)
 
 	// Recursively draw children
@@ -455,8 +451,10 @@ func (u *UI) drawDijkstraResults(screen *ebiten.Image) {
 	for i, node := range u.simulator.Graph.Nodes {
 		if dist, exists := distances[i]; exists && dist != math.Inf(1) {
 			distText := fmt.Sprintf("%.1f", dist)
-			text.Draw(screen, distText, u.smallFont,
-				node.X+25, node.Y-10, color.RGBA{255, 0, 0, 255})
+			//text.Draw(screen, distText, u.smallFont, node.X+25, node.Y-10, color.RGBA{255, 0, 0, 255})
+			esset.DrawText(screen, distText,
+				float64(node.X+25), float64(node.Y-10),
+				assets.FontFaceS, color.RGBA{255, 0, 0, 255})
 		}
 	}
 }
@@ -491,8 +489,11 @@ func (u *UI) drawTopologicalOrder(screen *ebiten.Image) {
 		if nodeId < len(u.simulator.Graph.Nodes) {
 			node := u.simulator.Graph.Nodes[nodeId]
 			orderText := fmt.Sprintf("%d", order+1)
-			text.Draw(screen, orderText, u.smallFont,
-				node.X+25, node.Y+10, color.RGBA{0, 0, 255, 255})
+			//text.Draw(screen, orderText, u.smallFont,	node.X+25, node.Y+10, color.RGBA{0, 0, 255, 255})
+			esset.DrawText(screen, orderText,
+				float64(node.X+25), float64(node.Y+10),
+				assets.FontFaceS, color.RGBA{0, 0, 255, 255})
+			// Draw node number
 		}
 	}
 }
@@ -518,8 +519,11 @@ func (u *UI) drawMST(screen *ebiten.Image) {
 			midX := (from.X + to.X) / 2
 			midY := (from.Y + to.Y) / 2
 			weightText := fmt.Sprintf("%.1f", edge.Weight)
-			text.Draw(screen, weightText, u.smallFont,
-				midX, midY, color.RGBA{0, 128, 0, 255})
+			//text.Draw(screen, weightText, u.smallFont,
+			//	midX, midY, color.RGBA{0, 128, 0, 255})
+			esset.DrawText(screen, weightText,
+				float64(midX), float64(midY),
+				assets.FontFaceS, color.RGBA{0, 128, 0, 255})
 		}
 	}
 }
@@ -550,8 +554,11 @@ func (u *UI) drawSCCs(screen *ebiten.Image) {
 			if nodeId < len(u.simulator.Graph.Nodes) {
 				node := u.simulator.Graph.Nodes[nodeId]
 				sccText := fmt.Sprintf("SCC%d", sccIndex+1)
-				text.Draw(screen, sccText, u.smallFont,
-					node.X-15, node.Y+30, sccColor)
+				// text.Draw(screen, sccText, u.smallFont,
+				// 	node.X-15, node.Y+30, sccColor)
+				esset.DrawText(screen, sccText,
+					float64(node.X-15), float64(node.Y+30),
+					assets.FontFaceS, sccColor)
 			}
 		}
 	}
