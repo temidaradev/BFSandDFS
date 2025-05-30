@@ -22,8 +22,8 @@ func DefaultGridConfig() GridConfig {
 	return GridConfig{
 		CellSize:        20,
 		MajorLineEvery:  5,
-		MinorColor:      color.RGBA{220, 220, 220, 255},
-		MajorColor:      color.RGBA{180, 180, 180, 255},
+		MinorColor:      color.RGBA{220, 220, 220, 255}, // Will be overridden by theme
+		MajorColor:      color.RGBA{180, 180, 180, 255}, // Will be overridden by theme
 		ShowCoordinates: false,
 	}
 }
@@ -66,9 +66,9 @@ func DrawGrid(screen *ebiten.Image, width, height int, config GridConfig) {
 		return
 	}
 
-	// Create new grid image
+	// Create new grid image (background will be set by caller)
 	gridImg := ebiten.NewImage(width, height)
-	gridImg.Fill(color.RGBA{240, 240, 240, 255}) // Background
+	// Note: Background color should be set by the caller before drawing grid
 
 	// Get cached line images
 	minorLineImg := getOrCreateLineImage(config.MinorColor)
